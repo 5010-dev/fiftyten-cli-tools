@@ -128,6 +128,28 @@ program
     }
   });
 
+// Password command - get database password for manual configuration
+program
+  .command('password')
+  .description('Get database password for manual configuration')
+  .argument('<environment>', 'Environment (dev/main)')
+  .option('-d, --database <database>', 'Database name (platform, copytrading, etc.)', 'platform')
+  .option('--region <region>', 'AWS region', 'us-west-1')
+  .action(async (environment, options) => {
+    try {
+      const connector = new DatabaseConnector(options.region);
+      const password = await connector.getDatabasePassword(environment, options.database);
+      console.log(chalk.green('✅ Database password retrieved:'));
+      console.log(chalk.yellow(password));
+      console.log('');
+      console.log(chalk.gray('💡 Use this password in your DATABASE_URL:'));
+      console.log(chalk.cyan(`DATABASE_URL=postgres://fiftyten:${password}@localhost:5433/${options.database === 'platform' ? 'platform' : options.database}`));
+    } catch (error) {
+      console.error(chalk.red('Error retrieving password:'), error instanceof Error ? error.message : String(error));
+      process.exit(1);
+    }
+  });
+
 // Parse command line arguments
 program.parse();
 

@@ -1,28 +1,37 @@
-# @5010-indicator/db-connect
+# @fiftyten/db-connect
 
-Simple CLI tool for connecting to 5010 Indicator databases via AWS Session Manager.
+Simple CLI tool for connecting to Fiftyten databases via AWS Session Manager.
 
 ## Features
 
+✅ **One-Command Connection** - `fiftyten-db psql dev -d platform` - tunnel + password + psql automatically  
+✅ **Multi-Database Support** - Connect to platform, copytrading, or any configured database  
+✅ **Automatic Password Retrieval** - No manual password lookup required  
+✅ **Intelligent Port Conflict Detection** - Auto-suggests available ports  
+✅ **Smart MFA Handling** - Auto-discovers MFA devices with single prompt  
 ✅ **No SSH Keys Required** - Uses AWS Session Manager for secure connections  
-✅ **Auto-Discovery** - Automatically finds bastion hosts and database endpoints  
-✅ **Multiple Environments** - Supports dev and production environments  
-✅ **Simple Commands** - Easy-to-remember CLI interface  
-✅ **Port Forwarding** - Create local database tunnels  
-✅ **Direct Connection** - SSH into bastion host for manual operations
+✅ **Database Discovery** - `fiftyten-db databases dev` to see what's available
 
 ## Installation
 
 ### Global Installation (Recommended)
 
 ```bash
-npm install -g @5010-indicator/db-connect
+# With pnpm (team standard)
+pnpm add -g @fiftyten/db-connect
+
+# With npm
+npm install -g @fiftyten/db-connect
 ```
 
 ### One-time Usage
 
 ```bash
-npx @5010-indicator/db-connect tunnel dev
+# With pnpm
+pnpm dlx @fiftyten/db-connect psql dev -d platform
+
+# With npm
+npx @fiftyten/db-connect psql dev -d platform
 ```
 
 ## Prerequisites
@@ -51,60 +60,79 @@ npx @5010-indicator/db-connect tunnel dev
 ### Quick Start
 
 ```bash
-# Create tunnel to dev database
-5010-db tunnel dev
+# One command for complete database access (recommended)
+fiftyten-db psql dev -d platform
 
-# In another terminal, connect to database
-psql -h localhost -p 5432 -d platform -U fiftyten
+# Alternative: Manual tunnel approach
+fiftyten-db tunnel dev -d platform
+# In another terminal:
+psql -h localhost -p 5433 -d platform -U fiftyten
 ```
 
 ### Commands
 
-#### `tunnel` - Create Database Tunnel
+#### `psql` - One-Command Database Connection (Recommended)
 ```bash
-5010-db tunnel <environment> [options]
+fiftyten-db psql <environment> [options]
 
 # Examples
-5010-db tunnel dev                    # Tunnel to dev database on port 5432
-5010-db tunnel main --port 5433       # Tunnel to main database on port 5433
-5010-db tunnel dev --service copytrading  # Tunnel to copy-trading database
+fiftyten-db psql dev -d platform      # Connect to platform database
+fiftyten-db psql dev -d copytrading    # Connect to copytrading database
+fiftyten-db psql main -d platform -p 5434  # Use different port
 ```
 
-**Options:**
-- `-p, --port <port>` - Local port for tunnel (default: 5432)
-- `-s, --service <service>` - Database service (default: platform)
+#### `tunnel` - Create Database Tunnel
+```bash
+fiftyten-db tunnel <environment> [options]
+
+# Examples
+fiftyten-db tunnel dev -d platform    # Tunnel to platform database on port 5433
+fiftyten-db tunnel main -d copytrading -p 5434  # Tunnel to copytrading database
+```
+
+#### `databases` - Discover Available Databases
+```bash
+fiftyten-db databases <environment>
+
+# Examples
+fiftyten-db databases dev             # See what databases are available in dev
+```
+
+**Common Options:**
+- `-p, --port <port>` - Local port for tunnel (default: 5433)
+- `-d, --database <database>` - Database name (platform, copytrading, etc.)
 - `--region <region>` - AWS region (default: us-west-1)
 
 #### `connect` - Direct Database Connection
 ```bash
-5010-db connect <environment> [options]
+fiftyten-db connect <environment> [options]
 
 # Examples
-5010-db connect dev                   # Connect to dev database
-5010-db connect main --service copytrading  # Connect to copy-trading database
+fiftyten-db connect dev -d platform   # Connect to platform database
+fiftyten-db connect main -d copytrading  # Connect to copytrading database
 ```
 
 #### `ssh` - SSH into Bastion Host
 ```bash
-5010-db ssh <environment>
+fiftyten-db ssh <environment>
 
 # Examples
-5010-db ssh dev                       # SSH into dev bastion host
-5010-db ssh main                      # SSH into production bastion host
+fiftyten-db ssh dev                   # SSH into dev bastion host
+fiftyten-db ssh main                  # SSH into production bastion host
 ```
 
 #### `info` - Show Connection Information
 ```bash
-5010-db info <environment>
+fiftyten-db info <environment>
 
 # Examples
-5010-db info dev                      # Show dev environment info
-5010-db info main                     # Show production environment info
+fiftyten-db info dev                  # Show dev environment info
+fiftyten-db info main                 # Show production environment info
 ```
 
 #### `list` - List Available Environments
 ```bash
-5010-db list                          # Show all available environments
+fiftyten-db list                      # Show all available environments
 ```
 
 ## Workflows
@@ -112,22 +140,27 @@ psql -h localhost -p 5432 -d platform -U fiftyten
 ### Database Administration
 
 ```bash
-# 1. Create tunnel
-5010-db tunnel dev
+# Recommended: One command approach
+fiftyten-db psql dev -d platform
 
-# 2. Connect with your favorite tool
-psql -h localhost -p 5432 -d platform -U fiftyten
+# Alternative: Manual tunnel for GUI tools
+fiftyten-db tunnel dev -d platform
+# Then connect with your favorite tool:
+psql -h localhost -p 5433 -d platform -U fiftyten
 # OR
-pgadmin (connect to localhost:5432)
+pgadmin (connect to localhost:5433)
 # OR
-dbeaver (connect to localhost:5432)
+dbeaver (connect to localhost:5433)
 ```
 
 ### Quick Query
 
 ```bash
-# Direct connection for quick queries
-5010-db connect dev
+# One command for quick queries (recommended)
+fiftyten-db psql dev -d platform
+
+# Alternative: Direct connection approach
+fiftyten-db connect dev -d platform
 # Then run: psql -h DATABASE_HOST -p 5432 -d platform -U fiftyten
 ```
 
@@ -135,7 +168,7 @@ dbeaver (connect to localhost:5432)
 
 ```bash
 # SSH into bastion for manual operations
-5010-db ssh dev
+fiftyten-db ssh dev
 # Then you have full shell access with pre-installed tools
 ```
 
@@ -156,6 +189,17 @@ dbeaver (connect to localhost:5432)
 ### "Session Manager plugin not found"
 - Install Session Manager plugin (see Prerequisites above)
 - Restart your terminal after installation
+
+### "Port 5433 is already in use"
+- The CLI will automatically suggest available ports
+- Use a different port: `fiftyten-db psql dev -d platform -p 5434`
+- Find what's using the port: `lsof -i :5433`
+- Stop local PostgreSQL if running: `brew services stop postgresql`
+
+### "Could not load credentials from any providers"
+- Configure AWS credentials: `aws configure`
+- Or use IAM roles if running on EC2
+- Ensure MFA device is properly configured
 
 ### "Database connection refused"
 - Check that the database is running

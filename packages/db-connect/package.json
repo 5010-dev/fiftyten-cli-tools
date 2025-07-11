@@ -1,6 +1,6 @@
 {
   "name": "@fiftyten/db-connect",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "description": "Simple CLI tool for connecting to Fiftyten databases via AWS Session Manager",
   "main": "index.js",
   "bin": {
