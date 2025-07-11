@@ -9,8 +9,8 @@ Simple CLI tool for connecting to Fiftyten databases via AWS Session Manager.
 
 **Quick Start:**
 ```bash
-# Install globally
-npm install -g @fiftyten/db-connect
+# Install globally (pnpm - team standard)
+pnpm add -g @fiftyten/db-connect
 
 # Create database tunnel
 fiftyten-db tunnel dev
@@ -22,11 +22,25 @@ psql -h localhost -p 5432 -d platform -U fiftyten
 ## 📦 Installation
 
 ### Global Installation (Recommended)
+
+#### With pnpm (Team Standard)
+```bash
+pnpm add -g @fiftyten/db-connect
+```
+
+#### With npm
 ```bash
 npm install -g @fiftyten/db-connect
 ```
 
-### One-time Usage
+### One-time Usage (No Installation)
+
+#### With pnpm
+```bash
+pnpm dlx @fiftyten/db-connect tunnel dev
+```
+
+#### With npm
 ```bash
 npx @fiftyten/db-connect tunnel dev
 ```
@@ -114,6 +128,38 @@ pnpm publish-packages
 
 # Publish specific package
 pnpm --filter package-name publish --access public
+```
+
+## 🎯 Usage Examples
+
+### Database Connection Commands
+```bash
+# Create tunnel to development database
+fiftyten-db tunnel dev
+
+# Connect directly to production database
+fiftyten-db connect main
+
+# SSH into bastion host
+fiftyten-db ssh dev
+
+# Show connection information
+fiftyten-db info dev
+
+# List all available environments
+fiftyten-db list
+```
+
+### Team Workflow
+```bash
+# 1. Install once globally with pnpm
+pnpm add -g @fiftyten/db-connect
+
+# 2. Connect to dev database
+fiftyten-db tunnel dev
+
+# 3. In another terminal, use psql
+psql -h localhost -p 5432 -d platform -U fiftyten
 ```
 
 ## 🤝 Contributing
