@@ -94,6 +94,24 @@ program
     }
   });
 
+// Psql command - complete database connection with password
+program
+  .command('psql')
+  .description('Connect to database with automatic tunnel and password retrieval')
+  .argument('<environment>', 'Environment (dev/main)')
+  .option('-p, --port <port>', 'Local port for tunnel', '5432')
+  .option('-s, --service <service>', 'Database service', 'platform')
+  .option('--region <region>', 'AWS region', 'us-west-1')
+  .action(async (environment, options) => {
+    try {
+      const connector = new DatabaseConnector(options.region);
+      await connector.connectWithPassword(environment, options.service, parseInt(options.port));
+    } catch (error) {
+      console.error(chalk.red('Error connecting to database:'), error instanceof Error ? error.message : String(error));
+      process.exit(1);
+    }
+  });
+
 // Parse command line arguments
 program.parse();
 

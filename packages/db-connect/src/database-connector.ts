@@ -1,5 +1,6 @@
 import { EC2Client, DescribeInstancesCommand } from '@aws-sdk/client-ec2';
 import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
+import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
 import { spawn } from 'child_process';
 import chalk from 'chalk';
 import { MfaAuthenticator } from './mfa-auth';
@@ -29,6 +30,7 @@ export interface DatabaseInfo {
 export class DatabaseConnector {
   private ec2Client: EC2Client;
   private ssmClient: SSMClient;
+  private secretsClient: SecretsManagerClient;
   private mfaAuth: MfaAuthenticator;
   private region: string;
   private mfaAuthenticated: boolean = false;
@@ -37,6 +39,7 @@ export class DatabaseConnector {
     this.region = region;
     this.ec2Client = new EC2Client({ region });
     this.ssmClient = new SSMClient({ region });
+    this.secretsClient = new SecretsManagerClient({ region });
     this.mfaAuth = new MfaAuthenticator(region);
   }
 
@@ -66,6 +69,7 @@ export class DatabaseConnector {
         };
         this.ec2Client = new EC2Client(clientConfig);
         this.ssmClient = new SSMClient(clientConfig);
+        this.secretsClient = new SecretsManagerClient(clientConfig);
         
         // Mark as authenticated to prevent re-prompting
         this.mfaAuthenticated = true;
@@ -159,6 +163,28 @@ export class DatabaseConnector {
     }
 
     return JSON.parse(response.Parameter.Value);
+  }
+
+  /**
+   * Get database password from Secrets Manager
+   */
+  async getDatabasePassword(environment: string, service: string = 'platform'): Promise<string> {
+    const dbInfo = await this.getDatabaseInfo(environment, service);
+    
+    const command = new GetSecretValueCommand({
+      SecretId: dbInfo.DATABASE_SECRET_ARN
+    });
+
+    const response = await this.callWithMfaRetry(async () => {
+      return await this.secretsClient.send(command);
+    });
+
+    if (!response.SecretString) {
+      throw new Error(`Database password not found in secret: ${dbInfo.DATABASE_SECRET_ARN}`);
+    }
+
+    const secretValue = JSON.parse(response.SecretString);
+    return secretValue.password || secretValue.PASSWORD;
   }
 
   /**
@@ -368,8 +394,132 @@ export class DatabaseConnector {
     }
 
     console.log(chalk.gray('Usage examples:'));
-    console.log(chalk.cyan('  5010-db tunnel dev     # Create tunnel to dev database'));
-    console.log(chalk.cyan('  5010-db connect main   # Connect to main database'));
-    console.log(chalk.cyan('  5010-db ssh dev        # SSH into dev bastion host'));
+    console.log(chalk.cyan('  fiftyten-db tunnel dev     # Create tunnel to dev database'));
+    console.log(chalk.cyan('  fiftyten-db connect main   # Connect to main database'));
+    console.log(chalk.cyan('  fiftyten-db ssh dev        # SSH into dev bastion host'));
+    console.log(chalk.cyan('  fiftyten-db psql dev       # Connect with automatic password'));
+  }
+
+  /**
+   * Connect to database with automatic tunnel and password retrieval
+   */
+  async connectWithPassword(environment: string, service: string = 'platform', localPort: number = 5432): Promise<void> {
+    console.log(chalk.blue('🔗 Setting up complete database connection...'));
+    
+    try {
+      // Get database info and password
+      const [dbInfo, password] = await Promise.all([
+        this.getDatabaseInfo(environment, service),
+        this.getDatabasePassword(environment, service)
+      ]);
+
+      console.log(chalk.green('✅ Retrieved database credentials'));
+      console.log(`   Environment: ${chalk.yellow(environment)}`);
+      console.log(`   Service: ${chalk.yellow(service)}`);
+      console.log(`   Database: ${chalk.yellow(dbInfo.DATABASE_NAME)}`);
+      console.log(`   User: ${chalk.yellow(dbInfo.DATABASE_USER)}`);
+      console.log('');
+
+      // Create tunnel in background
+      console.log(chalk.blue('🚀 Creating database tunnel...'));
+      const instanceId = await this.getBastionInstanceId(environment);
+      
+      // Start Session Manager port forwarding
+      const args = [
+        'ssm', 'start-session',
+        '--target', instanceId,
+        '--document-name', 'AWS-StartPortForwardingSessionToRemoteHost',
+        '--parameters', `host=${dbInfo.DATABASE_HOST},portNumber=${dbInfo.DATABASE_PORT},localPortNumber=${localPort}`
+      ];
+
+      const child = spawn('aws', args, {
+        stdio: ['ignore', 'pipe', 'pipe']
+      });
+
+      // Wait for tunnel to establish
+      console.log(chalk.gray('   Waiting for tunnel to establish...'));
+      
+      return new Promise((resolve, reject) => {
+        let tunnelReady = false;
+        
+        const checkTunnel = () => {
+          setTimeout(() => {
+            if (!tunnelReady) {
+              // Set password as environment variable for psql
+              process.env.PGPASSWORD = password;
+              
+              console.log(chalk.green('✅ Tunnel established! Connecting to database...'));
+              console.log('');
+              
+              // Launch psql with the connection details
+              const psqlArgs = [
+                '-h', 'localhost',
+                '-p', localPort.toString(),
+                '-d', dbInfo.DATABASE_NAME,
+                '-U', dbInfo.DATABASE_USER
+              ];
+
+              const psql = spawn('psql', psqlArgs, {
+                stdio: 'inherit'
+              });
+
+              psql.on('exit', (code) => {
+                // Clean up password from environment
+                delete process.env.PGPASSWORD;
+                
+                // Terminate the tunnel
+                child.kill();
+                
+                if (code === 0) {
+                  console.log(chalk.green('Database session ended'));
+                  resolve();
+                } else {
+                  reject(new Error(`psql exited with code ${code}`));
+                }
+              });
+
+              psql.on('error', (error) => {
+                delete process.env.PGPASSWORD;
+                child.kill();
+                
+                if (error.message.includes('ENOENT')) {
+                  reject(new Error('psql command not found. Please install PostgreSQL client.'));
+                } else {
+                  reject(error);
+                }
+              });
+
+              tunnelReady = true;
+            }
+          }, 3000); // Wait 3 seconds for tunnel to establish
+        };
+
+        child.stdout?.on('data', (data) => {
+          const output = data.toString();
+          if (output.includes('Waiting for connections') || output.includes('Port forwarding session started')) {
+            if (!tunnelReady) {
+              checkTunnel();
+            }
+          }
+        });
+
+        child.on('error', (error) => {
+          delete process.env.PGPASSWORD;
+          console.error(chalk.red('Error starting tunnel:'), error.message);
+          reject(error);
+        });
+
+        // Fallback - if no specific output detected, try after 5 seconds
+        setTimeout(() => {
+          if (!tunnelReady) {
+            checkTunnel();
+          }
+        }, 5000);
+      });
+
+    } catch (error) {
+      console.error(chalk.red('Error setting up database connection:'), error instanceof Error ? error.message : String(error));
+      throw error;
+    }
   }
 }
