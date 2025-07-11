@@ -407,11 +407,9 @@ export class DatabaseConnector {
     console.log(chalk.blue('🔗 Setting up complete database connection...'));
     
     try {
-      // Get database info and password
-      const [dbInfo, password] = await Promise.all([
-        this.getDatabaseInfo(environment, service),
-        this.getDatabasePassword(environment, service)
-      ]);
+      // Get database info first, then password (to avoid duplicate MFA)
+      const dbInfo = await this.getDatabaseInfo(environment, service);
+      const password = await this.getDatabasePassword(environment, service);
 
       console.log(chalk.green('✅ Retrieved database credentials'));
       console.log(`   Environment: ${chalk.yellow(environment)}`);
