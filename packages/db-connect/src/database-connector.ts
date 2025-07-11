@@ -501,6 +501,13 @@ export class DatabaseConnector {
       console.log(`   Database: ${chalk.yellow(database)}`);
       console.log(`   Database: ${chalk.yellow(dbInfo.DATABASE_NAME)}`);
       console.log(`   User: ${chalk.yellow(dbInfo.DATABASE_USER)}`);
+      console.log(`   Password: ${chalk.yellow(password)}`);
+      console.log('');
+      console.log(chalk.gray('💡 DATABASE_URL options for manual configuration:'));
+      console.log(chalk.cyan(`# Connect to specific database:`));
+      console.log(chalk.cyan(`DATABASE_URL=postgres://${dbInfo.DATABASE_USER}:${password}@localhost:${localPort}/${dbInfo.DATABASE_NAME}`));
+      console.log(chalk.cyan(`# Connect to RDS instance (switch databases freely):`));
+      console.log(chalk.cyan(`DATABASE_URL=postgres://${dbInfo.DATABASE_USER}:${password}@localhost:${localPort}/postgres`));
       console.log('');
 
       // Check if local port is available
@@ -557,12 +564,13 @@ export class DatabaseConnector {
               console.log(chalk.green('✅ Tunnel established! Connecting to database...'));
               console.log('');
               
-              // Launch psql with the connection details
+              // Launch psql with connection to RDS instance (no specific database)
+              // This allows users to switch between databases once connected
               const psqlArgs = [
                 '-h', 'localhost',
                 '-p', localPort.toString(),
-                '-d', dbInfo.DATABASE_NAME,
-                '-U', dbInfo.DATABASE_USER
+                '-U', dbInfo.DATABASE_USER,
+                'postgres'  // Connect to default postgres database on RDS instance
               ];
 
               const psql = spawn('psql', psqlArgs, {

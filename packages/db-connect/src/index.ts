@@ -142,8 +142,11 @@ program
       console.log(chalk.green('✅ Database password retrieved:'));
       console.log(chalk.yellow(password));
       console.log('');
-      console.log(chalk.gray('💡 Use this password in your DATABASE_URL:'));
+      console.log(chalk.gray('💡 DATABASE_URL options:'));
+      console.log(chalk.cyan(`# Connect to specific database:`));
       console.log(chalk.cyan(`DATABASE_URL=postgres://fiftyten:${password}@localhost:5433/${options.database === 'platform' ? 'platform' : options.database}`));
+      console.log(chalk.cyan(`# Connect to RDS instance (switch databases freely):`));
+      console.log(chalk.cyan(`DATABASE_URL=postgres://fiftyten:${password}@localhost:5433/postgres`));
     } catch (error) {
       console.error(chalk.red('Error retrieving password:'), error instanceof Error ? error.message : String(error));
       process.exit(1);

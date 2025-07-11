@@ -282,7 +282,7 @@ Could not auto-discover MFA devices, using fallback detection
 
 | Tool | Description | Status | Version |
 |------|-------------|--------|---------|
-| [db-connect](./packages/db-connect) | Multi-database connection via Session Manager | ✅ Active | 1.6.0 |
+| [db-connect](./packages/db-connect) | Multi-database connection via Session Manager | ✅ Active | 1.7.0 |
 | monitoring-cli | Infrastructure monitoring tools | 🚧 Planned | - |
 | deployment-helper | Deployment utilities | 🚧 Planned | - |
 
