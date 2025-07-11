@@ -18,12 +18,12 @@ program
   .description('Create SSH tunnel to database via Session Manager')
   .argument('<environment>', 'Environment (dev/main)')
   .option('-p, --port <port>', 'Local port for tunnel', '5432')
-  .option('-s, --service <service>', 'Database service', 'platform')
+  .option('-d, --database <database>', 'Database name (platform, copytrading, etc.)', 'platform')
   .option('--region <region>', 'AWS region', 'us-west-1')
   .action(async (environment, options) => {
     try {
       const connector = new DatabaseConnector(options.region);
-      await connector.createTunnel(environment, options.service, parseInt(options.port));
+      await connector.createTunnel(environment, options.database, parseInt(options.port));
     } catch (error) {
       console.error(chalk.red('Error creating tunnel:'), error instanceof Error ? error.message : String(error));
       process.exit(1);
@@ -35,12 +35,12 @@ program
   .command('connect')
   .description('Connect directly to database via Session Manager')
   .argument('<environment>', 'Environment (dev/main)')
-  .option('-s, --service <service>', 'Database service', 'platform')
+  .option('-d, --database <database>', 'Database name (platform, copytrading, etc.)', 'platform')
   .option('--region <region>', 'AWS region', 'us-west-1')
   .action(async (environment, options) => {
     try {
       const connector = new DatabaseConnector(options.region);
-      await connector.connectDatabase(environment, options.service);
+      await connector.connectDatabase(environment, options.database);
     } catch (error) {
       console.error(chalk.red('Error connecting to database:'), error instanceof Error ? error.message : String(error));
       process.exit(1);
@@ -100,14 +100,30 @@ program
   .description('Connect to database with automatic tunnel and password retrieval')
   .argument('<environment>', 'Environment (dev/main)')
   .option('-p, --port <port>', 'Local port for tunnel', '5432')
-  .option('-s, --service <service>', 'Database service', 'platform')
+  .option('-d, --database <database>', 'Database name (platform, copytrading, etc.)', 'platform')
   .option('--region <region>', 'AWS region', 'us-west-1')
   .action(async (environment, options) => {
     try {
       const connector = new DatabaseConnector(options.region);
-      await connector.connectWithPassword(environment, options.service, parseInt(options.port));
+      await connector.connectWithPassword(environment, options.database, parseInt(options.port));
     } catch (error) {
       console.error(chalk.red('Error connecting to database:'), error instanceof Error ? error.message : String(error));
+      process.exit(1);
+    }
+  });
+
+// Databases command - discover available databases
+program
+  .command('databases')
+  .description('Discover available databases for an environment')
+  .argument('<environment>', 'Environment (dev/main)')
+  .option('--region <region>', 'AWS region', 'us-west-1')
+  .action(async (environment, options) => {
+    try {
+      const connector = new DatabaseConnector(options.region);
+      await connector.discoverDatabases(environment);
+    } catch (error) {
+      console.error(chalk.red('Error discovering databases:'), error instanceof Error ? error.message : String(error));
       process.exit(1);
     }
   });

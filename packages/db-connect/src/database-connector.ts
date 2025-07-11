@@ -146,10 +146,10 @@ export class DatabaseConnector {
   /**
    * Get database information from SSM
    */
-  private async getDatabaseInfo(environment: string, service: string = 'platform'): Promise<DatabaseInfo> {
-    const parameterName = service === 'platform' 
+  private async getDatabaseInfo(environment: string, database: string = 'platform'): Promise<DatabaseInfo> {
+    const parameterName = database === 'platform' 
       ? `/indicator/platform-api/${environment}/database-environment-variables`
-      : `/indicator/${service}-api/${environment}/database-environment-variables`;
+      : `/indicator/${database}-api/${environment}/database-environment-variables`;
 
     const response = await this.callWithMfaRetry(async () => {
       const command = new GetParameterCommand({
@@ -159,7 +159,7 @@ export class DatabaseConnector {
     });
     
     if (!response.Parameter || !response.Parameter.Value) {
-      throw new Error(`Database info not found for ${service} in environment: ${environment}`);
+      throw new Error(`Database info not found for ${database} in environment: ${environment}`);
     }
 
     return JSON.parse(response.Parameter.Value);
@@ -168,8 +168,8 @@ export class DatabaseConnector {
   /**
    * Get database password from Secrets Manager
    */
-  async getDatabasePassword(environment: string, service: string = 'platform'): Promise<string> {
-    const dbInfo = await this.getDatabaseInfo(environment, service);
+  async getDatabasePassword(environment: string, database: string = 'platform'): Promise<string> {
+    const dbInfo = await this.getDatabaseInfo(environment, database);
     
     const command = new GetSecretValueCommand({
       SecretId: dbInfo.DATABASE_SECRET_ARN
@@ -190,15 +190,15 @@ export class DatabaseConnector {
   /**
    * Create SSH tunnel to database via Session Manager
    */
-  async createTunnel(environment: string, service: string = 'platform', localPort: number = 5432): Promise<void> {
+  async createTunnel(environment: string, database: string = 'platform', localPort: number = 5432): Promise<void> {
     console.log(chalk.blue('🔗 Creating database tunnel via Session Manager...'));
     
     const instanceId = await this.getBastionInstanceId(environment);
-    const dbInfo = await this.getDatabaseInfo(environment, service);
+    const dbInfo = await this.getDatabaseInfo(environment, database);
 
     console.log(chalk.green('✅ Connection details:'));
     console.log(`   Environment: ${chalk.yellow(environment)}`);
-    console.log(`   Service: ${chalk.yellow(service)}`);
+    console.log(`   Database: ${chalk.yellow(database)}`);
     console.log(`   Local port: ${chalk.yellow(localPort)}`);
     console.log(`   Remote database: ${chalk.yellow(dbInfo.DATABASE_HOST + ':' + dbInfo.DATABASE_PORT)}`);
     console.log(`   Database: ${chalk.yellow(dbInfo.DATABASE_NAME)}`);
@@ -240,15 +240,15 @@ export class DatabaseConnector {
   /**
    * Connect directly to database via Session Manager
    */
-  async connectDatabase(environment: string, service: string = 'platform'): Promise<void> {
+  async connectDatabase(environment: string, database: string = 'platform'): Promise<void> {
     console.log(chalk.blue('🔗 Connecting to database via Session Manager...'));
     
     const instanceId = await this.getBastionInstanceId(environment);
-    const dbInfo = await this.getDatabaseInfo(environment, service);
+    const dbInfo = await this.getDatabaseInfo(environment, database);
 
     console.log(chalk.green('✅ Connection details:'));
     console.log(`   Environment: ${chalk.yellow(environment)}`);
-    console.log(`   Service: ${chalk.yellow(service)}`);
+    console.log(`   Database: ${chalk.yellow(database)}`);
     console.log(`   Database: ${chalk.yellow(dbInfo.DATABASE_HOST + ':' + dbInfo.DATABASE_PORT + '/' + dbInfo.DATABASE_NAME)}`);
     console.log(`   Username: ${chalk.yellow(dbInfo.DATABASE_USER)}`);
     console.log('');
@@ -394,26 +394,57 @@ export class DatabaseConnector {
     }
 
     console.log(chalk.gray('Usage examples:'));
-    console.log(chalk.cyan('  fiftyten-db tunnel dev     # Create tunnel to dev database'));
-    console.log(chalk.cyan('  fiftyten-db connect main   # Connect to main database'));
-    console.log(chalk.cyan('  fiftyten-db ssh dev        # SSH into dev bastion host'));
-    console.log(chalk.cyan('  fiftyten-db psql dev       # Connect with automatic password'));
+    console.log(chalk.cyan('  fiftyten-db tunnel dev -d platform     # Create tunnel to platform database'));
+    console.log(chalk.cyan('  fiftyten-db connect main -d copytrading # Connect to copytrading database'));
+    console.log(chalk.cyan('  fiftyten-db ssh dev                     # SSH into dev bastion host'));
+    console.log(chalk.cyan('  fiftyten-db psql dev -d platform        # Connect with automatic password'));
+  }
+
+  /**
+   * Discover available databases for an environment
+   */
+  async discoverDatabases(environment: string): Promise<string[]> {
+    console.log(chalk.blue(`🔍 Discovering available databases for ${environment.toUpperCase()}...`));
+    console.log('');
+
+    const databases = ['platform', 'copytrading']; // Common database types
+    const available: string[] = [];
+
+    for (const database of databases) {
+      try {
+        await this.getDatabaseInfo(environment, database);
+        available.push(database);
+        console.log(chalk.green(`✅ ${database}`));
+        console.log(`   Command: ${chalk.cyan(`fiftyten-db psql ${environment} -d ${database}`)}`);
+      } catch (error) {
+        console.log(chalk.gray(`⚪ ${database} (not configured)`));
+      }
+    }
+
+    console.log('');
+    if (available.length === 0) {
+      console.log(chalk.yellow('⚠️  No databases found for this environment'));
+    } else {
+      console.log(chalk.green(`Found ${available.length} available database(s)`));
+    }
+
+    return available;
   }
 
   /**
    * Connect to database with automatic tunnel and password retrieval
    */
-  async connectWithPassword(environment: string, service: string = 'platform', localPort: number = 5432): Promise<void> {
+  async connectWithPassword(environment: string, database: string = 'platform', localPort: number = 5432): Promise<void> {
     console.log(chalk.blue('🔗 Setting up complete database connection...'));
     
     try {
       // Get database info first, then password (to avoid duplicate MFA)
-      const dbInfo = await this.getDatabaseInfo(environment, service);
-      const password = await this.getDatabasePassword(environment, service);
+      const dbInfo = await this.getDatabaseInfo(environment, database);
+      const password = await this.getDatabasePassword(environment, database);
 
       console.log(chalk.green('✅ Retrieved database credentials'));
       console.log(`   Environment: ${chalk.yellow(environment)}`);
-      console.log(`   Service: ${chalk.yellow(service)}`);
+      console.log(`   Database: ${chalk.yellow(database)}`);
       console.log(`   Database: ${chalk.yellow(dbInfo.DATABASE_NAME)}`);
       console.log(`   User: ${chalk.yellow(dbInfo.DATABASE_USER)}`);
       console.log('');
