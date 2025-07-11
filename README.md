@@ -12,11 +12,10 @@ Simple CLI tool for connecting to Fiftyten databases via AWS Session Manager.
 # Install globally (pnpm - team standard)
 pnpm add -g @fiftyten/db-connect
 
-# Create database tunnel
-fiftyten-db tunnel dev
+# One command for complete database access
+fiftyten-db psql dev -d platform
 
-# Connect to database
-psql -h localhost -p 5432 -d platform -U fiftyten
+# That's it! Automatic tunnel + password + psql connection
 ```
 
 ## 📦 Installation
@@ -37,12 +36,20 @@ npm install -g @fiftyten/db-connect
 
 #### With pnpm
 ```bash
-pnpm dlx @fiftyten/db-connect tunnel dev
+# One-command connection
+pnpm dlx @fiftyten/db-connect psql dev -d platform
+
+# Or manual tunnel
+pnpm dlx @fiftyten/db-connect tunnel dev -d platform
 ```
 
 #### With npm
 ```bash
-npx @fiftyten/db-connect tunnel dev
+# One-command connection  
+npx @fiftyten/db-connect psql dev -d platform
+
+# Or manual tunnel
+npx @fiftyten/db-connect tunnel dev -d platform
 ```
 
 ## 🏗️ Development
@@ -132,13 +139,31 @@ pnpm --filter package-name publish --access public
 
 ## 🎯 Usage Examples
 
-### Database Connection Commands
+### One-Command Database Connection (Recommended)
+```bash
+# Connect to platform database with automatic password
+fiftyten-db psql dev -d platform
+
+# Connect to copy trading database  
+fiftyten-db psql dev -d copytrading
+
+# Use different port if needed
+fiftyten-db psql dev -d platform -p 5433
+```
+
+### Database Discovery
+```bash
+# See what databases are available
+fiftyten-db databases dev
+```
+
+### Manual Tunnel Commands (Advanced)
 ```bash
 # Create tunnel to development database
-fiftyten-db tunnel dev
+fiftyten-db tunnel dev -d platform
 
 # Connect directly to production database
-fiftyten-db connect main
+fiftyten-db connect main -d copytrading
 
 # SSH into bastion host
 fiftyten-db ssh dev
@@ -155,10 +180,13 @@ fiftyten-db list
 # 1. Install once globally with pnpm
 pnpm add -g @fiftyten/db-connect
 
-# 2. Connect to dev database (will prompt for MFA if required)
-fiftyten-db tunnel dev
+# 2. One command for complete database access (recommended)
+fiftyten-db psql dev -d platform
 
-# 3. In another terminal, use psql
+# Alternative: Manual tunnel approach
+# 2a. Create tunnel (will prompt for MFA if required)
+fiftyten-db tunnel dev -d platform
+# 2b. In another terminal, use psql
 psql -h localhost -p 5432 -d platform -U fiftyten
 ```
 
@@ -197,13 +225,17 @@ Could not auto-discover MFA devices, using fallback detection
 ? Enter MFA token code: 123456
 ```
 
-**Features:**
-- 🔍 **Smart Auto-Discovery** of MFA devices from IAM
+**Key Features:**
+- 🚀 **One-Command Connection**: `fiftyten-db psql dev -d platform` - tunnel + password + psql automatically
+- 🔍 **Multi-Database Support**: Connect to platform, copytrading, or any configured database
+- 🔍 **Database Discovery**: `fiftyten-db databases dev` to see what's available
+- 🔐 **Smart MFA Handling**: Auto-discovers MFA devices with single prompt
 - 🎯 **Single Device Auto-Selection** for seamless experience  
-- 📋 **Multiple Device Selection** with friendly device names
+- 📋 **Multiple Device Selection** with friendly device names when needed
 - 🔒 **Secure Session Token** handling (no role assumption needed)
 - ⏰ **Session Management** with automatic expiration
-- 🔄 **Automatic Retry** of failed operations after MFA authentication
+- 🔄 **Automatic Password Retrieval** from AWS Secrets Manager
+- 🛡️ **Enterprise Security**: Session Manager + MFA + Secrets Manager integration
 
 ## 🤝 Contributing
 
@@ -223,7 +255,7 @@ Could not auto-discover MFA devices, using fallback detection
 
 | Tool | Description | Status | Version |
 |------|-------------|--------|---------|
-| [db-connect](./packages/db-connect) | Database connection via Session Manager | ✅ Active | 1.2.0 |
+| [db-connect](./packages/db-connect) | Multi-database connection via Session Manager | ✅ Active | 1.4.0 |
 | monitoring-cli | Infrastructure monitoring tools | 🚧 Planned | - |
 | deployment-helper | Deployment utilities | 🚧 Planned | - |
 
