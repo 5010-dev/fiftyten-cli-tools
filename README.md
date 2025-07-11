@@ -186,10 +186,10 @@ fiftyten-db databases dev
 
 ### Manual Tunnel Commands (Advanced)
 ```bash
-# Create tunnel to development database
+# Create tunnel to platform database
 fiftyten-db tunnel dev -d platform
 
-# Connect directly to production database
+# Connect directly to copytrading database
 fiftyten-db connect main -d copytrading
 
 # SSH into bastion host
@@ -282,7 +282,7 @@ Could not auto-discover MFA devices, using fallback detection
 
 | Tool | Description | Status | Version |
 |------|-------------|--------|---------|
-| [db-connect](./packages/db-connect) | Multi-database connection via Session Manager | ✅ Active | 1.7.0 |
+| [db-connect](./packages/db-connect) | Multi-database connection via Session Manager | ✅ Active | 1.8.0 |
 | monitoring-cli | Infrastructure monitoring tools | 🚧 Planned | - |
 | deployment-helper | Deployment utilities | 🚧 Planned | - |
 

@@ -18,7 +18,7 @@ program
   .description('Create SSH tunnel to database via Session Manager')
   .argument('<environment>', 'Environment (dev/main)')
   .option('-p, --port <port>', 'Local port for tunnel', '5433')
-  .option('-d, --database <database>', 'Database name (platform, copytrading, etc.)', 'platform')
+  .option('-d, --database <app>', 'Application database (platform, copytrading, etc.)', 'platform')
   .option('--region <region>', 'AWS region', 'us-west-1')
   .action(async (environment, options) => {
     try {
@@ -35,7 +35,7 @@ program
   .command('connect')
   .description('Connect directly to database via Session Manager')
   .argument('<environment>', 'Environment (dev/main)')
-  .option('-d, --database <database>', 'Database name (platform, copytrading, etc.)', 'platform')
+  .option('-d, --database <app>', 'Application database (platform, copytrading, etc.)', 'platform')
   .option('--region <region>', 'AWS region', 'us-west-1')
   .action(async (environment, options) => {
     try {
@@ -100,7 +100,7 @@ program
   .description('Connect to database with automatic tunnel and password retrieval')
   .argument('<environment>', 'Environment (dev/main)')
   .option('-p, --port <port>', 'Local port for tunnel', '5433')
-  .option('-d, --database <database>', 'Database name (platform, copytrading, etc.)', 'platform')
+  .option('-d, --database <app>', 'Application database (platform, copytrading, etc.)', 'platform')
   .option('--region <region>', 'AWS region', 'us-west-1')
   .action(async (environment, options) => {
     try {
@@ -133,7 +133,7 @@ program
   .command('password')
   .description('Get database password for manual configuration')
   .argument('<environment>', 'Environment (dev/main)')
-  .option('-d, --database <database>', 'Database name (platform, copytrading, etc.)', 'platform')
+  .option('-d, --database <app>', 'Application database (platform, copytrading, etc.)', 'platform')
   .option('--region <region>', 'AWS region', 'us-west-1')
   .action(async (environment, options) => {
     try {
@@ -142,11 +142,8 @@ program
       console.log(chalk.green('✅ Database password retrieved:'));
       console.log(chalk.yellow(password));
       console.log('');
-      console.log(chalk.gray('💡 DATABASE_URL options:'));
-      console.log(chalk.cyan(`# Connect to specific database:`));
+      console.log(chalk.gray('💡 DATABASE_URL for manual configuration:'));
       console.log(chalk.cyan(`DATABASE_URL=postgres://fiftyten:${password}@localhost:5433/${options.database === 'platform' ? 'platform' : options.database}`));
-      console.log(chalk.cyan(`# Connect to RDS instance (switch databases freely):`));
-      console.log(chalk.cyan(`DATABASE_URL=postgres://fiftyten:${password}@localhost:5433/postgres`));
     } catch (error) {
       console.error(chalk.red('Error retrieving password:'), error instanceof Error ? error.message : String(error));
       process.exit(1);
