@@ -1,5 +1,11 @@
 # @fiftyten/db-connect
 
+[![npm version](https://badge.fury.io/js/%40fiftyten%2Fdb-connect.svg)](https://www.npmjs.com/package/@fiftyten/db-connect)
+[![Downloads](https://img.shields.io/npm/dm/@fiftyten/db-connect.svg)](https://npmjs.org/package/@fiftyten/db-connect)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![AWS](https://img.shields.io/badge/AWS-232F3E?logo=amazon-aws&logoColor=white)](https://aws.amazon.com/)
+
 Simple CLI tool for connecting to Fiftyten databases via AWS Session Manager.
 
 ## Features

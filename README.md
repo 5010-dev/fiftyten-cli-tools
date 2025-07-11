@@ -1,5 +1,11 @@
 # Fiftyten CLI Tools
 
+[![Publish Status](https://github.com/5010-dev/fiftyten-cli-tools/workflows/Publish%20CLI%20Tools/badge.svg)](https://github.com/5010-dev/fiftyten-cli-tools/actions)
+[![npm version](https://badge.fury.io/js/%40fiftyten%2Fdb-connect.svg)](https://badge.fury.io/js/%40fiftyten%2Fdb-connect)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Node.js Version](https://img.shields.io/badge/node-%3E%3D16.0.0-brightgreen.svg)](https://nodejs.org/)
+[![pnpm](https://img.shields.io/badge/pnpm-%3E%3D8.0.0-blue.svg)](https://pnpm.io/)
+
 A collection of command-line tools for the Fiftyten platform, designed to improve developer experience and operational efficiency.
 
 ## 🚀 Tools Available
