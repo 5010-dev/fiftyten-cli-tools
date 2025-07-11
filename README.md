@@ -155,12 +155,37 @@ fiftyten-db list
 # 1. Install once globally with pnpm
 pnpm add -g @fiftyten/db-connect
 
-# 2. Connect to dev database
+# 2. Connect to dev database (will prompt for MFA if required)
 fiftyten-db tunnel dev
 
 # 3. In another terminal, use psql
 psql -h localhost -p 5432 -d platform -U fiftyten
 ```
+
+### MFA Authentication
+
+The CLI tool automatically handles MFA authentication when required:
+
+```bash
+# When MFA is required, you'll see:
+🔐 MFA authentication required
+🔒 Starting MFA authentication...
+
+# The tool will prompt for:
+? MFA Role ARN: arn:aws:iam::ACCOUNT:role/your-mfa-role
+? MFA Device Serial Number: arn:aws:iam::ACCOUNT:mfa/username
+? Session Name: fiftyten-db-session
+? Enter MFA token code: 123456
+
+✅ MFA authentication successful!
+Session expires: 12/31/2023, 2:00:00 PM
+```
+
+**Features:**
+- 🤖 **Auto-detection** of MFA configuration from current AWS identity
+- 🔒 **Secure token handling** with temporary credentials
+- ⏰ **Session management** with automatic expiration
+- 🔄 **Automatic retry** of failed operations after MFA authentication
 
 ## 🤝 Contributing
 

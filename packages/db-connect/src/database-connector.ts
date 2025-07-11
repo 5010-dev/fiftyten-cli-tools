@@ -2,6 +2,7 @@ import { EC2Client, DescribeInstancesCommand } from '@aws-sdk/client-ec2';
 import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
 import { spawn } from 'child_process';
 import chalk from 'chalk';
+import { MfaAuthenticator } from './mfa-auth';
 
 export interface ConnectionInfo {
   instanceId: string;
@@ -28,9 +29,42 @@ export interface DatabaseInfo {
 export class DatabaseConnector {
   private ec2Client: EC2Client;
   private ssmClient: SSMClient;
+  private mfaAuth: MfaAuthenticator;
+  private region: string;
+
   constructor(region: string = 'us-west-1') {
+    this.region = region;
     this.ec2Client = new EC2Client({ region });
     this.ssmClient = new SSMClient({ region });
+    this.mfaAuth = new MfaAuthenticator(region);
+  }
+
+  /**
+   * Handle AWS API calls with automatic MFA authentication
+   */
+  private async callWithMfaRetry<T>(operation: () => Promise<T>): Promise<T> {
+    try {
+      return await operation();
+    } catch (error) {
+      // Check if this is an MFA-related error
+      if (this.mfaAuth.isMfaRequired(error)) {
+        console.log(chalk.yellow('⚠️  MFA authentication required for AWS access'));
+        
+        // Attempt MFA authentication
+        const credentials = await this.mfaAuth.authenticateWithMfa();
+        this.mfaAuth.applyCredentials(credentials);
+        
+        // Recreate clients with new credentials
+        this.ec2Client = new EC2Client({ region: this.region });
+        this.ssmClient = new SSMClient({ region: this.region });
+        
+        // Retry the operation
+        return await operation();
+      }
+      
+      // Re-throw if not MFA-related
+      throw error;
+    }
   }
 
   /**
@@ -39,7 +73,7 @@ export class DatabaseConnector {
   private async getBastionInstanceId(environment: string): Promise<string> {
     try {
       // First try to get from SSM parameter
-      const connectionInfo = await this.getConnectionInfo(environment);
+      const connectionInfo = await this.callWithMfaRetry(() => this.getConnectionInfo(environment));
       if (connectionInfo.instanceId) {
         return connectionInfo.instanceId;
       }
@@ -48,20 +82,21 @@ export class DatabaseConnector {
     }
 
     // Fallback: search EC2 instances by tag
-    const command = new DescribeInstancesCommand({
-      Filters: [
-        {
-          Name: 'tag:Name',
-          Values: [`indicator-bastion-${environment}-host`]
-        },
-        {
-          Name: 'instance-state-name',
-          Values: ['running', 'stopped']
-        }
-      ]
+    const response = await this.callWithMfaRetry(async () => {
+      const command = new DescribeInstancesCommand({
+        Filters: [
+          {
+            Name: 'tag:Name',
+            Values: [`indicator-bastion-${environment}-host`]
+          },
+          {
+            Name: 'instance-state-name',
+            Values: ['running', 'stopped']
+          }
+        ]
+      });
+      return await this.ec2Client.send(command);
     });
-
-    const response = await this.ec2Client.send(command);
     
     if (!response.Reservations || response.Reservations.length === 0) {
       throw new Error(`No bastion host found for environment: ${environment}`);
@@ -100,11 +135,12 @@ export class DatabaseConnector {
       ? `/indicator/platform-api/${environment}/database-environment-variables`
       : `/indicator/${service}-api/${environment}/database-environment-variables`;
 
-    const command = new GetParameterCommand({
-      Name: parameterName
+    const response = await this.callWithMfaRetry(async () => {
+      const command = new GetParameterCommand({
+        Name: parameterName
+      });
+      return await this.ssmClient.send(command);
     });
-
-    const response = await this.ssmClient.send(command);
     
     if (!response.Parameter || !response.Parameter.Value) {
       throw new Error(`Database info not found for ${service} in environment: ${environment}`);
