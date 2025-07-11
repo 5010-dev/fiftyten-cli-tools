@@ -1,19 +1,19 @@
-# 5010 Indicator CLI Tools
+# Fiftyten CLI Tools
 
-A collection of command-line tools for the 5010 Indicator platform, designed to improve developer experience and operational efficiency.
+A collection of command-line tools for the Fiftyten platform, designed to improve developer experience and operational efficiency.
 
 ## 🚀 Tools Available
 
-### [@5010-indicator/db-connect](./packages/db-connect)
-Simple CLI tool for connecting to 5010 Indicator databases via AWS Session Manager.
+### [@fiftyten/db-connect](./packages/db-connect)
+Simple CLI tool for connecting to Fiftyten databases via AWS Session Manager.
 
 **Quick Start:**
 ```bash
 # Install globally
-npm install -g @5010-indicator/db-connect
+npm install -g @fiftyten/db-connect
 
 # Create database tunnel
-5010-db tunnel dev
+fiftyten-db tunnel dev
 
 # Connect to database
 psql -h localhost -p 5432 -d platform -U fiftyten
@@ -23,12 +23,12 @@ psql -h localhost -p 5432 -d platform -U fiftyten
 
 ### Global Installation (Recommended)
 ```bash
-npm install -g @5010-indicator/db-connect
+npm install -g @fiftyten/db-connect
 ```
 
 ### One-time Usage
 ```bash
-npx @5010-indicator/db-connect tunnel dev
+npx @fiftyten/db-connect tunnel dev
 ```
 
 ## 🏗️ Development
@@ -83,8 +83,8 @@ packages/your-tool/
 ```
 
 ### Naming Convention
-- **Package name**: `@5010-indicator/tool-name`
-- **Binary name**: `5010-tool` or descriptive name
+- **Package name**: `@fiftyten/tool-name`
+- **Binary name**: `fiftyten-tool` or descriptive name
 - **Repository folder**: `tool-name`
 
 ### Requirements
@@ -141,8 +141,8 @@ pnpm --filter package-name publish --access public
 ## 🆘 Support
 
 - **Documentation**: Check individual tool READMEs
-- **Issues**: [GitHub Issues](https://github.com/your-org/5010-indicator-cli-tools/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/your-org/5010-indicator-cli-tools/discussions)
+- **Issues**: [GitHub Issues](https://github.com/5010-dev/fiftyten-cli-tools/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/5010-dev/fiftyten-cli-tools/discussions)
 
 ## 📄 License
 
@@ -150,6 +150,6 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 ## 🔗 Related Projects
 
-- [5010-indicator](https://github.com/your-org/5010-indicator) - Main platform
-- [5010-indicator-storage-infra](https://github.com/your-org/5010-indicator-storage-infra) - Storage infrastructure
-- [indicator-ecs-infra](https://github.com/your-org/indicator-ecs-infra) - ECS infrastructure
+- [5010-indicator](https://github.com/5010-dev/5010-indicator) - Main platform
+- [5010-indicator-storage-infra](https://github.com/5010-dev/5010-indicator-storage-infra) - Storage infrastructure
+- [indicator-ecs-infra](https://github.com/5010-dev/indicator-ecs-infra) - ECS infrastructure

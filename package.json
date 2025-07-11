@@ -40,10 +40,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/your-org/fiftyten-cli-tools.git"
+    "url": "git+https://github.com/5010-dev/fiftyten-cli-tools.git"
   },
   "bugs": {
-    "url": "https://github.com/your-org/fiftyten-cli-tools/issues"
+    "url": "https://github.com/5010-dev/fiftyten-cli-tools/issues"
   },
-  "homepage": "https://github.com/your-org/fiftyten-cli-tools#readme"
+  "homepage": "https://github.com/5010-dev/fiftyten-cli-tools#readme"
 }
