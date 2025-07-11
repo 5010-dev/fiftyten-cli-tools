@@ -25,7 +25,7 @@ program
       const connector = new DatabaseConnector(options.region);
       await connector.createTunnel(environment, options.service, parseInt(options.port));
     } catch (error) {
-      console.error(chalk.red('Error creating tunnel:'), error.message);
+      console.error(chalk.red('Error creating tunnel:'), error instanceof Error ? error.message : String(error));
       process.exit(1);
     }
   });
@@ -42,7 +42,7 @@ program
       const connector = new DatabaseConnector(options.region);
       await connector.connectDatabase(environment, options.service);
     } catch (error) {
-      console.error(chalk.red('Error connecting to database:'), error.message);
+      console.error(chalk.red('Error connecting to database:'), error instanceof Error ? error.message : String(error));
       process.exit(1);
     }
   });
@@ -58,7 +58,7 @@ program
       const connector = new DatabaseConnector(options.region);
       await connector.sshBastion(environment);
     } catch (error) {
-      console.error(chalk.red('Error connecting to bastion:'), error.message);
+      console.error(chalk.red('Error connecting to bastion:'), error instanceof Error ? error.message : String(error));
       process.exit(1);
     }
   });
@@ -74,7 +74,7 @@ program
       const connector = new DatabaseConnector(options.region);
       await connector.showInfo(environment);
     } catch (error) {
-      console.error(chalk.red('Error fetching info:'), error.message);
+      console.error(chalk.red('Error fetching info:'), error instanceof Error ? error.message : String(error));
       process.exit(1);
     }
   });
@@ -89,7 +89,7 @@ program
       const connector = new DatabaseConnector(options.region);
       await connector.listEnvironments();
     } catch (error) {
-      console.error(chalk.red('Error listing environments:'), error.message);
+      console.error(chalk.red('Error listing environments:'), error instanceof Error ? error.message : String(error));
       process.exit(1);
     }
   });

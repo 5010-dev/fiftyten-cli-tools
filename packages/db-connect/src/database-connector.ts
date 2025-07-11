@@ -1,4 +1,4 @@
-import { EC2Client, DescribeInstancesCommand, Instance } from '@aws-sdk/client-ec2';
+import { EC2Client, DescribeInstancesCommand } from '@aws-sdk/client-ec2';
 import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
 import { spawn } from 'child_process';
 import chalk from 'chalk';
@@ -13,6 +13,7 @@ export interface ConnectionInfo {
   portForwardCommand: string;
   cliToolCommand: string;
   sshEnabled?: boolean;
+  keyName?: string;
   note?: string;
 }
 
@@ -27,10 +28,7 @@ export interface DatabaseInfo {
 export class DatabaseConnector {
   private ec2Client: EC2Client;
   private ssmClient: SSMClient;
-  private region: string;
-
   constructor(region: string = 'us-west-1') {
-    this.region = region;
     this.ec2Client = new EC2Client({ region });
     this.ssmClient = new SSMClient({ region });
   }
@@ -274,7 +272,7 @@ export class DatabaseConnector {
       }
 
     } catch (error) {
-      console.error(chalk.red('Error fetching connection info:'), error.message);
+      console.error(chalk.red('Error fetching connection info:'), error instanceof Error ? error.message : String(error));
       
       // Try to get basic instance info
       try {
@@ -316,7 +314,7 @@ export class DatabaseConnector {
       } catch (error) {
         console.log(chalk.red(`❌ ${env.toUpperCase()}`));
         console.log(`   Status: ${chalk.red('Not available')}`);
-        console.log(`   Error: ${chalk.gray(error.message)}`);
+        console.log(`   Error: ${chalk.gray(error instanceof Error ? error.message : String(error))}`);
         console.log('');
       }
     }
