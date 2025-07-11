@@ -1,4 +1,4 @@
-import { STSClient, AssumeRoleCommand, GetCallerIdentityCommand } from '@aws-sdk/client-sts';
+import { STSClient, AssumeRoleCommand, GetCallerIdentityCommand, GetSessionTokenCommand } from '@aws-sdk/client-sts';
 import inquirer from 'inquirer';
 import chalk from 'chalk';
 
@@ -97,22 +97,10 @@ export class MfaAuthenticator {
    */
   async promptMfaConfig(detectedConfig?: MfaConfig | null): Promise<MfaConfig> {
     console.log(chalk.yellow('🔐 MFA authentication required'));
-    console.log(chalk.gray('Please provide your MFA configuration:'));
+    console.log(chalk.gray('Please provide your MFA device serial number:'));
     console.log('');
 
     const questions = [
-      {
-        type: 'input',
-        name: 'roleArn',
-        message: 'MFA Role ARN:',
-        default: detectedConfig?.roleArn,
-        validate: (input: string) => {
-          if (!input || !input.startsWith('arn:aws:iam::')) {
-            return 'Please enter a valid IAM role ARN (arn:aws:iam::ACCOUNT:role/ROLE_NAME)';
-          }
-          return true;
-        }
-      },
       {
         type: 'input',
         name: 'mfaSerial',
@@ -124,18 +112,12 @@ export class MfaAuthenticator {
           }
           return true;
         }
-      },
-      {
-        type: 'input',
-        name: 'sessionName',
-        message: 'Session Name:',
-        default: detectedConfig?.sessionName || 'fiftyten-db-session'
       }
     ];
 
     const answers = await inquirer.prompt(questions);
     return {
-      ...answers,
+      mfaSerial: answers.mfaSerial,
       region: this.region
     };
   }
@@ -159,6 +141,45 @@ export class MfaAuthenticator {
     ]);
 
     return answer.token;
+  }
+
+  /**
+   * Get session token with MFA (for users with MFA enforcement policies)
+   */
+  async getSessionTokenWithMfa(config: MfaConfig, tokenCode: string): Promise<MfaCredentials> {
+    const command = new GetSessionTokenCommand({
+      SerialNumber: config.mfaSerial,
+      TokenCode: tokenCode,
+      DurationSeconds: 3600 // 1 hour
+    });
+
+    try {
+      const response = await this.stsClient.send(command);
+      
+      if (!response.Credentials) {
+        throw new Error('No credentials returned from STS');
+      }
+
+      return {
+        accessKeyId: response.Credentials.AccessKeyId!,
+        secretAccessKey: response.Credentials.SecretAccessKey!,
+        sessionToken: response.Credentials.SessionToken!,
+        expiration: response.Credentials.Expiration
+      };
+    } catch (error) {
+      if (error instanceof Error) {
+        if (error.message.includes('MultiFactorAuthentication')) {
+          throw new Error('Invalid MFA token code. Please try again.');
+        }
+        if (error.message.includes('TokenCode')) {
+          throw new Error('Invalid or expired MFA token code.');
+        }
+        if (error.message.includes('AccessDenied')) {
+          throw new Error('Access denied. Please check your MFA device serial number.');
+        }
+      }
+      throw error;
+    }
   }
 
   /**
@@ -217,9 +238,9 @@ export class MfaAuthenticator {
     // Prompt for MFA token
     const tokenCode = await this.promptMfaToken();
     
-    // Assume role with MFA
-    console.log(chalk.gray('Assuming role with MFA...'));
-    const credentials = await this.assumeRoleWithMfa(config, tokenCode);
+    // Get session token with MFA (not role assumption)
+    console.log(chalk.gray('Getting MFA session token...'));
+    const credentials = await this.getSessionTokenWithMfa(config, tokenCode);
     
     console.log(chalk.green('✅ MFA authentication successful!'));
     console.log(chalk.gray(`Session expires: ${credentials.expiration?.toLocaleString()}`));
