@@ -17,7 +17,7 @@ program
   .command('tunnel')
   .description('Create SSH tunnel to database via Session Manager')
   .argument('<environment>', 'Environment (dev/main)')
-  .option('-p, --port <port>', 'Local port for tunnel', '5432')
+  .option('-p, --port <port>', 'Local port for tunnel', '5433')
   .option('-d, --database <database>', 'Database name (platform, copytrading, etc.)', 'platform')
   .option('--region <region>', 'AWS region', 'us-west-1')
   .action(async (environment, options) => {
@@ -99,7 +99,7 @@ program
   .command('psql')
   .description('Connect to database with automatic tunnel and password retrieval')
   .argument('<environment>', 'Environment (dev/main)')
-  .option('-p, --port <port>', 'Local port for tunnel', '5432')
+  .option('-p, --port <port>', 'Local port for tunnel', '5433')
   .option('-d, --database <database>', 'Database name (platform, copytrading, etc.)', 'platform')
   .option('--region <region>', 'AWS region', 'us-west-1')
   .action(async (environment, options) => {

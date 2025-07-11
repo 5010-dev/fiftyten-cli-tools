@@ -2,6 +2,7 @@ import { EC2Client, DescribeInstancesCommand } from '@aws-sdk/client-ec2';
 import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
 import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
 import { spawn } from 'child_process';
+import { createConnection } from 'net';
 import chalk from 'chalk';
 import { MfaAuthenticator } from './mfa-auth';
 
@@ -41,6 +42,36 @@ export class DatabaseConnector {
     this.ssmClient = new SSMClient({ region });
     this.secretsClient = new SecretsManagerClient({ region });
     this.mfaAuth = new MfaAuthenticator(region);
+  }
+
+  /**
+   * Check if a local port is available
+   */
+  private async isPortAvailable(port: number): Promise<boolean> {
+    return new Promise((resolve) => {
+      const connection = createConnection({ port, host: 'localhost' });
+      
+      connection.on('connect', () => {
+        connection.destroy();
+        resolve(false); // Port is in use
+      });
+      
+      connection.on('error', () => {
+        resolve(true); // Port is available
+      });
+    });
+  }
+
+  /**
+   * Find an available port starting from the given port
+   */
+  private async findAvailablePort(startPort: number): Promise<number> {
+    for (let port = startPort; port <= startPort + 10; port++) {
+      if (await this.isPortAvailable(port)) {
+        return port;
+      }
+    }
+    throw new Error(`No available ports found in range ${startPort}-${startPort + 10}`);
   }
 
   /**
@@ -190,7 +221,7 @@ export class DatabaseConnector {
   /**
    * Create SSH tunnel to database via Session Manager
    */
-  async createTunnel(environment: string, database: string = 'platform', localPort: number = 5432): Promise<void> {
+  async createTunnel(environment: string, database: string = 'platform', localPort: number = 5433): Promise<void> {
     console.log(chalk.blue('🔗 Creating database tunnel via Session Manager...'));
     
     const instanceId = await this.getBastionInstanceId(environment);
@@ -203,6 +234,29 @@ export class DatabaseConnector {
     console.log(`   Remote database: ${chalk.yellow(dbInfo.DATABASE_HOST + ':' + dbInfo.DATABASE_PORT)}`);
     console.log(`   Database: ${chalk.yellow(dbInfo.DATABASE_NAME)}`);
     console.log('');
+
+    // Check if local port is available
+    console.log(chalk.blue('🔍 Checking local port availability...'));
+    const isAvailable = await this.isPortAvailable(localPort);
+    
+    if (!isAvailable) {
+      console.log(chalk.red(`❌ Port ${localPort} is already in use`));
+      console.log('');
+      console.log(chalk.yellow('💡 Solutions:'));
+      console.log(`   1. Use a different port: ${chalk.cyan(`fiftyten-db tunnel ${environment} -d ${database} -p 5433`)}`);
+      console.log(`   2. Find what's using port ${localPort}: ${chalk.gray(`lsof -i :${localPort}`)}`);
+      console.log(`   3. Stop local PostgreSQL if running: ${chalk.gray('brew services stop postgresql')}`);
+      
+      // Try to suggest an available port
+      try {
+        const availablePort = await this.findAvailablePort(localPort + 1);
+        console.log(`   4. Suggested available port: ${chalk.cyan(`fiftyten-db tunnel ${environment} -d ${database} -p ${availablePort}`)}`);
+      } catch {
+        // Ignore if we can't find an available port
+      }
+      
+      throw new Error(`Port ${localPort} is in use. Please use a different port with -p option.`);
+    }
 
     console.log(chalk.green('🚀 Starting tunnel...'));
     console.log(chalk.gray('   Once tunnel is established, connect with:'));
@@ -434,7 +488,7 @@ export class DatabaseConnector {
   /**
    * Connect to database with automatic tunnel and password retrieval
    */
-  async connectWithPassword(environment: string, database: string = 'platform', localPort: number = 5432): Promise<void> {
+  async connectWithPassword(environment: string, database: string = 'platform', localPort: number = 5433): Promise<void> {
     console.log(chalk.blue('🔗 Setting up complete database connection...'));
     
     try {
@@ -448,6 +502,29 @@ export class DatabaseConnector {
       console.log(`   Database: ${chalk.yellow(dbInfo.DATABASE_NAME)}`);
       console.log(`   User: ${chalk.yellow(dbInfo.DATABASE_USER)}`);
       console.log('');
+
+      // Check if local port is available
+      console.log(chalk.blue('🔍 Checking local port availability...'));
+      const isAvailable = await this.isPortAvailable(localPort);
+      
+      if (!isAvailable) {
+        console.log(chalk.red(`❌ Port ${localPort} is already in use`));
+        console.log('');
+        console.log(chalk.yellow('💡 Solutions:'));
+        console.log(`   1. Use a different port: ${chalk.cyan(`fiftyten-db psql ${environment} -d ${database} -p 5433`)}`);
+        console.log(`   2. Find what's using port ${localPort}: ${chalk.gray(`lsof -i :${localPort}`)}`);
+        console.log(`   3. Stop local PostgreSQL if running: ${chalk.gray('brew services stop postgresql')}`);
+        
+        // Try to suggest an available port
+        try {
+          const availablePort = await this.findAvailablePort(localPort + 1);
+          console.log(`   4. Suggested available port: ${chalk.cyan(`fiftyten-db psql ${environment} -d ${database} -p ${availablePort}`)}`);
+        } catch {
+          // Ignore if we can't find an available port
+        }
+        
+        throw new Error(`Port ${localPort} is in use. Please use a different port with -p option.`);
+      }
 
       // Create tunnel in background
       console.log(chalk.blue('🚀 Creating database tunnel...'));
