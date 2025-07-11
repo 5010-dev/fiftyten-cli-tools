@@ -1,0 +1,155 @@
+# 5010 Indicator CLI Tools
+
+A collection of command-line tools for the 5010 Indicator platform, designed to improve developer experience and operational efficiency.
+
+## 🚀 Tools Available
+
+### [@5010-indicator/db-connect](./packages/db-connect)
+Simple CLI tool for connecting to 5010 Indicator databases via AWS Session Manager.
+
+**Quick Start:**
+```bash
+# Install globally
+npm install -g @5010-indicator/db-connect
+
+# Create database tunnel
+5010-db tunnel dev
+
+# Connect to database
+psql -h localhost -p 5432 -d platform -U fiftyten
+```
+
+## 📦 Installation
+
+### Global Installation (Recommended)
+```bash
+npm install -g @5010-indicator/db-connect
+```
+
+### One-time Usage
+```bash
+npx @5010-indicator/db-connect tunnel dev
+```
+
+## 🏗️ Development
+
+This is a monorepo using pnpm workspaces.
+
+### Setup
+```bash
+# Install dependencies
+pnpm install
+
+# Build all packages
+pnpm build
+
+# Run tests
+pnpm test
+```
+
+### Working with Packages
+```bash
+# Install dependencies for specific package
+pnpm --filter db-connect install
+
+# Build specific package
+pnpm --filter db-connect build
+
+# Run specific package
+pnpm --filter db-connect dev
+```
+
+### Adding New Tools
+```bash
+# Create new package
+mkdir packages/new-tool
+cd packages/new-tool
+npm init -y
+
+# Add to workspace (automatic with pnpm)
+```
+
+## 📋 Tool Guidelines
+
+### Package Structure
+```
+packages/your-tool/
+├── package.json        # Package configuration
+├── tsconfig.json       # TypeScript configuration
+├── README.md          # Tool documentation
+├── bin/               # Executable files
+├── src/               # Source code
+└── dist/              # Compiled output (gitignored)
+```
+
+### Naming Convention
+- **Package name**: `@5010-indicator/tool-name`
+- **Binary name**: `5010-tool` or descriptive name
+- **Repository folder**: `tool-name`
+
+### Requirements
+- **TypeScript**: All tools must be written in TypeScript
+- **Tests**: Include comprehensive tests
+- **Documentation**: Clear README with examples
+- **CLI Standards**: Follow common CLI patterns (help, version, etc.)
+
+## 🔐 Security
+
+- All tools must follow security best practices
+- Use AWS SDK v3 for AWS integrations
+- Never hardcode credentials or sensitive data
+- Support AWS credential chain (IAM roles, profiles, etc.)
+
+## 🚀 Publishing
+
+Packages are automatically published to npm when:
+- Changes are merged to `main` branch
+- Package version is bumped
+- GitHub Actions CI passes
+
+### Manual Publishing
+```bash
+# Publish all changed packages
+pnpm publish-packages
+
+# Publish specific package
+pnpm --filter package-name publish --access public
+```
+
+## 🤝 Contributing
+
+1. **Fork** the repository
+2. **Create** a feature branch (`git checkout -b feature/amazing-feature`)
+3. **Commit** your changes (`git commit -m 'Add amazing feature'`)
+4. **Push** to the branch (`git push origin feature/amazing-feature`)
+5. **Open** a Pull Request
+
+### Development Workflow
+1. **Issues First**: Create an issue before starting work
+2. **Small PRs**: Keep pull requests focused and small
+3. **Tests Required**: All new features must include tests
+4. **Documentation**: Update documentation for user-facing changes
+
+## 📊 Available Tools
+
+| Tool | Description | Status | Version |
+|------|-------------|--------|---------|
+| [db-connect](./packages/db-connect) | Database connection via Session Manager | ✅ Active | 1.0.0 |
+| monitoring-cli | Infrastructure monitoring tools | 🚧 Planned | - |
+| deployment-helper | Deployment utilities | 🚧 Planned | - |
+
+## 🆘 Support
+
+- **Documentation**: Check individual tool READMEs
+- **Issues**: [GitHub Issues](https://github.com/your-org/5010-indicator-cli-tools/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/your-org/5010-indicator-cli-tools/discussions)
+
+## 📄 License
+
+MIT License - see [LICENSE](LICENSE) file for details.
+
+## 🔗 Related Projects
+
+- [5010-indicator](https://github.com/your-org/5010-indicator) - Main platform
+- [5010-indicator-storage-infra](https://github.com/your-org/5010-indicator-storage-infra) - Storage infrastructure
+- [indicator-ecs-infra](https://github.com/your-org/indicator-ecs-infra) - ECS infrastructure

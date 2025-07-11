@@ -1,0 +1,145 @@
+name: Publish CLI Tools
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/**'
+      - 'package.json'
+      - 'pnpm-workspace.yaml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: latest
+          run_install: false
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v3
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: pnpm build
+
+      - name: Run tests
+        run: pnpm test
+
+      - name: Check for changes
+        id: changes
+        run: |
+          # Check if any packages have changes that warrant publishing
+          CHANGED_PACKAGES=$(pnpm -r exec pwd | while read package_dir; do
+            cd "$package_dir"
+            package_name=$(node -p "require('./package.json').name")
+            package_version=$(node -p "require('./package.json').version")
+            
+            # Check if this version exists on npm
+            if npm view "$package_name@$package_version" --silent 2>/dev/null; then
+              echo "Package $package_name@$package_version already exists on npm"
+            else
+              echo "Package $package_name@$package_version needs to be published"
+              echo "$package_dir"
+            fi
+          done)
+          
+          if [ -n "$CHANGED_PACKAGES" ]; then
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "changed_packages<<EOF" >> $GITHUB_OUTPUT
+            echo "$CHANGED_PACKAGES" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          else
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Publish packages
+        if: steps.changes.outputs.has_changes == 'true'
+        run: |
+          echo "Publishing changed packages:"
+          echo "${{ steps.changes.outputs.changed_packages }}"
+          
+          # Configure npm authentication
+          echo "//registry.npmjs.org/:_authToken=$NODE_AUTH_TOKEN" > ~/.npmrc
+          
+          # Publish each changed package
+          echo "${{ steps.changes.outputs.changed_packages }}" | while read package_dir; do
+            if [ -n "$package_dir" ] && [ -d "$package_dir" ]; then
+              cd "$package_dir"
+              package_name=$(node -p "require('./package.json').name")
+              echo "Publishing $package_name..."
+              pnpm publish --access public --no-git-checks
+            fi
+          done
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create release notes
+        if: steps.changes.outputs.has_changes == 'true'
+        run: |
+          echo "## 📦 Published Packages" >> release_notes.md
+          echo "" >> release_notes.md
+          
+          echo "${{ steps.changes.outputs.changed_packages }}" | while read package_dir; do
+            if [ -n "$package_dir" ] && [ -d "$package_dir" ]; then
+              cd "$package_dir"
+              package_name=$(node -p "require('./package.json').name")
+              package_version=$(node -p "require('./package.json').version")
+              echo "- **$package_name@$package_version**" >> ../release_notes.md
+            fi
+          done
+          
+          echo "" >> release_notes.md
+          echo "### Installation" >> release_notes.md
+          echo '```bash' >> release_notes.md
+          echo "npm install -g @5010-indicator/db-connect" >> release_notes.md
+          echo '```' >> release_notes.md
+
+      - name: Discord notification
+        if: always()
+        uses: sarisia/actions-status-discord@v1
+        with:
+          webhook: ${{ secrets.DISCORD_WEBHOOK }}
+          title: "🛠️ CLI Tools Publishing - ${{ steps.changes.outputs.has_changes == 'true' && 'Published' || 'No Changes' }}"
+          description: |
+            **Status:** ${{ job.status == 'success' && '✅ Success' || '❌ Failure' }}
+            **Changes:** ${{ steps.changes.outputs.has_changes == 'true' && 'Packages published' || 'No packages to publish' }}
+            **Commit:** [${{ github.sha }}](https://github.com/${{ github.repository }}/commit/${{ github.sha }})
+            **Committer:** ${{ github.actor }}
+            
+            ${{ steps.changes.outputs.has_changes == 'true' && '**Install:** `npm install -g @5010-indicator/db-connect`' || '' }}
+            ${{ job.status != 'success' && format('**[View Details in GitHub Actions](https://github.com/{0}/actions/runs/{1})**', github.repository, github.run_id) || '' }}
+          color: ${{ job.status == 'success' && '0x4BB543' || '0xFF0000' }}
+          username: 5010 CLI Bot
+          avatar_url: https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png

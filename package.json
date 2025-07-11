@@ -1,0 +1,49 @@
+{
+  "name": "fiftyten-cli-tools",
+  "version": "1.0.0",
+  "description": "Command line tools for Fiftyten platform",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "lint": "pnpm -r lint",
+    "format": "pnpm -r format",
+    "clean": "pnpm -r clean",
+    "dev": "pnpm -r dev",
+    "publish-packages": "pnpm -r publish --access public"
+  },
+  "keywords": [
+    "fiftyten",
+    "5010-technologies",
+    "cli",
+    "tools",
+    "database",
+    "aws",
+    "session-manager"
+  ],
+  "author": "5010 Technologies Team",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0",
+    "prettier": "^3.0.0",
+    "eslint": "^8.0.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0"
+  },
+  "engines": {
+    "node": ">=16.0.0",
+    "pnpm": ">=8.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/your-org/fiftyten-cli-tools.git"
+  },
+  "bugs": {
+    "url": "https://github.com/your-org/fiftyten-cli-tools/issues"
+  },
+  "homepage": "https://github.com/your-org/fiftyten-cli-tools#readme"
+}

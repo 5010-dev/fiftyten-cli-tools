@@ -1,0 +1,46 @@
+{
+  "name": "@fiftyten/db-connect",
+  "version": "1.0.0",
+  "description": "Simple CLI tool for connecting to Fiftyten databases via AWS Session Manager",
+  "main": "index.js",
+  "bin": {
+    "fiftyten-db": "./bin/fiftyten-db.js",
+    "db-connect": "./bin/fiftyten-db.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "fiftyten",
+    "5010-technologies",
+    "database",
+    "aws",
+    "session-manager",
+    "cli"
+  ],
+  "author": "5010 Technologies Team",
+  "license": "MIT",
+  "dependencies": {
+    "commander": "^11.0.0",
+    "chalk": "^4.1.2",
+    "@aws-sdk/client-ec2": "^3.0.0",
+    "@aws-sdk/client-ssm": "^3.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/your-org/fiftyten-cli-tools.git",
+    "directory": "packages/db-connect"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
