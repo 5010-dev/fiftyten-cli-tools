@@ -166,26 +166,44 @@ psql -h localhost -p 5432 -d platform -U fiftyten
 
 The CLI tool automatically handles MFA authentication when required:
 
+#### Auto-Discovery (New in v1.2.0!)
 ```bash
-# When MFA is required, you'll see:
+# When MFA is required, the tool auto-discovers your MFA device:
 🔐 MFA authentication required
-🔒 Starting MFA authentication...
-
-# The tool will prompt for:
-? MFA Role ARN: arn:aws:iam::ACCOUNT:role/your-mfa-role
-? MFA Device Serial Number: arn:aws:iam::ACCOUNT:mfa/username
-? Session Name: fiftyten-db-session
+✅ Auto-detected MFA device: arn:aws:iam::ACCOUNT:mfa/ED_GalaxyS24_Ultra
 ? Enter MFA token code: 123456
 
 ✅ MFA authentication successful!
 Session expires: 12/31/2023, 2:00:00 PM
 ```
 
+#### Multiple Devices
+```bash
+# If you have multiple MFA devices:
+🔐 MFA authentication required
+Multiple MFA devices found. Please select one:
+
+? Select MFA Device: 
+❯ ED_GalaxyS24_Ultra (arn:aws:iam::ACCOUNT:mfa/ED_GalaxyS24_Ultra)
+  backup-device (arn:aws:iam::ACCOUNT:mfa/backup-device)
+```
+
+#### Manual Entry (Fallback)
+```bash
+# If auto-discovery fails:
+🔐 MFA authentication required
+Could not auto-discover MFA devices, using fallback detection
+? MFA Device Serial Number: arn:aws:iam::ACCOUNT:mfa/device-name
+? Enter MFA token code: 123456
+```
+
 **Features:**
-- 🤖 **Auto-detection** of MFA configuration from current AWS identity
-- 🔒 **Secure token handling** with temporary credentials
-- ⏰ **Session management** with automatic expiration
-- 🔄 **Automatic retry** of failed operations after MFA authentication
+- 🔍 **Smart Auto-Discovery** of MFA devices from IAM
+- 🎯 **Single Device Auto-Selection** for seamless experience  
+- 📋 **Multiple Device Selection** with friendly device names
+- 🔒 **Secure Session Token** handling (no role assumption needed)
+- ⏰ **Session Management** with automatic expiration
+- 🔄 **Automatic Retry** of failed operations after MFA authentication
 
 ## 🤝 Contributing
 

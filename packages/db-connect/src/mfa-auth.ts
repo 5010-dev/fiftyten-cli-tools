@@ -1,4 +1,5 @@
 import { STSClient, AssumeRoleCommand, GetCallerIdentityCommand, GetSessionTokenCommand } from '@aws-sdk/client-sts';
+import { IAMClient, ListMFADevicesCommand } from '@aws-sdk/client-iam';
 import inquirer from 'inquirer';
 import chalk from 'chalk';
 
@@ -18,11 +19,13 @@ export interface MfaConfig {
 
 export class MfaAuthenticator {
   private stsClient: STSClient;
+  private iamClient: IAMClient;
   private region: string;
 
   constructor(region: string = 'us-west-1') {
     this.region = region;
     this.stsClient = new STSClient({ region });
+    this.iamClient = new IAMClient({ region });
   }
 
   /**
@@ -58,11 +61,53 @@ export class MfaAuthenticator {
   }
 
   /**
+   * Auto-discover MFA devices for current user
+   */
+  async discoverMfaDevices(): Promise<string[]> {
+    try {
+      // First, get current user identity
+      const identityCommand = new GetCallerIdentityCommand({});
+      const identityResponse = await this.stsClient.send(identityCommand);
+      
+      if (!identityResponse.Arn) {
+        return [];
+      }
+
+      // Extract username from ARN
+      const arnParts = identityResponse.Arn.split('/');
+      const username = arnParts[arnParts.length - 1];
+      
+      // List MFA devices for the user
+      const mfaCommand = new ListMFADevicesCommand({
+        UserName: username
+      });
+      
+      const mfaResponse = await this.iamClient.send(mfaCommand);
+      
+      return mfaResponse.MFADevices?.map(device => device.SerialNumber!) || [];
+    } catch (error) {
+      // If we can't list MFA devices, try fallback detection
+      console.log(chalk.yellow('Could not auto-discover MFA devices, using fallback detection'));
+      return [];
+    }
+  }
+
+  /**
    * Automatically detect MFA configuration from AWS config
    */
   async detectMfaConfig(): Promise<MfaConfig | null> {
     try {
-      // Try to get current identity to determine MFA device
+      // Try to auto-discover MFA devices
+      const mfaDevices = await this.discoverMfaDevices();
+      
+      if (mfaDevices.length > 0) {
+        return {
+          mfaSerial: mfaDevices[0], // Use first available device
+          region: this.region
+        };
+      }
+
+      // Fallback: Try to get current identity to determine MFA device
       const command = new GetCallerIdentityCommand({});
       const response = await this.stsClient.send(command);
       
@@ -75,13 +120,8 @@ export class MfaAuthenticator {
         // Common MFA device patterns
         const mfaSerial = `arn:aws:iam::${accountId}:mfa/${username}`;
         
-        // Common role patterns for MFA
-        const roleArn = `arn:aws:iam::${accountId}:role/${username}-mfa-role`;
-        
         return {
           mfaSerial,
-          roleArn,
-          sessionName: `${username}-mfa-session`,
           region: this.region
         };
       }
@@ -97,29 +137,64 @@ export class MfaAuthenticator {
    */
   async promptMfaConfig(detectedConfig?: MfaConfig | null): Promise<MfaConfig> {
     console.log(chalk.yellow('🔐 MFA authentication required'));
-    console.log(chalk.gray('Please provide your MFA device serial number:'));
-    console.log('');
+    
+    // Try to discover available MFA devices
+    const availableDevices = await this.discoverMfaDevices();
+    
+    if (availableDevices.length === 0) {
+      console.log(chalk.gray('Please provide your MFA device serial number:'));
+      console.log('');
 
-    const questions = [
-      {
-        type: 'input',
-        name: 'mfaSerial',
-        message: 'MFA Device Serial Number:',
-        default: detectedConfig?.mfaSerial,
-        validate: (input: string) => {
-          if (!input || !input.startsWith('arn:aws:iam::')) {
-            return 'Please enter a valid MFA device ARN (arn:aws:iam::ACCOUNT:mfa/USERNAME)';
+      const questions = [
+        {
+          type: 'input',
+          name: 'mfaSerial',
+          message: 'MFA Device Serial Number:',
+          default: detectedConfig?.mfaSerial,
+          validate: (input: string) => {
+            if (!input || !input.startsWith('arn:aws:iam::')) {
+              return 'Please enter a valid MFA device ARN (arn:aws:iam::ACCOUNT:mfa/DEVICE_NAME)';
+            }
+            return true;
           }
-          return true;
         }
-      }
-    ];
+      ];
 
-    const answers = await inquirer.prompt(questions);
-    return {
-      mfaSerial: answers.mfaSerial,
-      region: this.region
-    };
+      const answers = await inquirer.prompt(questions);
+      return {
+        mfaSerial: answers.mfaSerial,
+        region: this.region
+      };
+    } else if (availableDevices.length === 1) {
+      // Auto-select single device
+      console.log(chalk.green(`✅ Auto-detected MFA device: ${availableDevices[0]}`));
+      return {
+        mfaSerial: availableDevices[0],
+        region: this.region
+      };
+    } else {
+      // Multiple devices - let user choose
+      console.log(chalk.gray('Multiple MFA devices found. Please select one:'));
+      console.log('');
+
+      const questions = [
+        {
+          type: 'list',
+          name: 'mfaSerial',
+          message: 'Select MFA Device:',
+          choices: availableDevices.map(device => ({
+            name: device.split('/').pop() + ` (${device})`,
+            value: device
+          }))
+        }
+      ];
+
+      const answers = await inquirer.prompt(questions);
+      return {
+        mfaSerial: answers.mfaSerial,
+        region: this.region
+      };
+    }
   }
 
   /**
