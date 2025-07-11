@@ -9,16 +9,34 @@ Simple CLI tool for connecting to Fiftyten databases via AWS Session Manager.
 
 **Quick Start:**
 ```bash
-# Install globally (pnpm - team standard)
+# 1. Install prerequisites (one-time setup)
+brew install --cask session-manager-plugin
+brew install postgresql awscli
+
+# 2. Install globally (pnpm - team standard)
 pnpm add -g @fiftyten/db-connect
 
-# One command for complete database access
+# 3. One command for complete database access
 fiftyten-db psql dev -d platform
 
 # That's it! Automatic tunnel + password + psql connection
 ```
 
 ## 📦 Installation
+
+### Prerequisites
+
+**Required dependencies:**
+```bash
+# 1. AWS Session Manager plugin (required for tunnel connections)
+brew install --cask session-manager-plugin
+
+# 2. PostgreSQL client (for database connections)
+brew install postgresql
+
+# 3. AWS CLI (if not already installed)
+brew install awscli
+```
 
 ### Global Installation (Recommended)
 
@@ -30,6 +48,15 @@ pnpm add -g @fiftyten/db-connect
 #### With npm
 ```bash
 npm install -g @fiftyten/db-connect
+```
+
+### Quick Setup Verification
+```bash
+# Test that everything is installed correctly
+fiftyten-db --version
+session-manager-plugin
+psql --version
+aws --version
 ```
 
 ### One-time Usage (No Installation)
@@ -187,7 +214,7 @@ fiftyten-db psql dev -d platform
 # 2a. Create tunnel (will prompt for MFA if required)
 fiftyten-db tunnel dev -d platform
 # 2b. In another terminal, use psql
-psql -h localhost -p 5432 -d platform -U fiftyten
+psql -h localhost -p 5433 -d platform -U fiftyten
 ```
 
 ### MFA Authentication
@@ -255,11 +282,41 @@ Could not auto-discover MFA devices, using fallback detection
 
 | Tool | Description | Status | Version |
 |------|-------------|--------|---------|
-| [db-connect](./packages/db-connect) | Multi-database connection via Session Manager | ✅ Active | 1.4.0 |
+| [db-connect](./packages/db-connect) | Multi-database connection via Session Manager | ✅ Active | 1.5.0 |
 | monitoring-cli | Infrastructure monitoring tools | 🚧 Planned | - |
 | deployment-helper | Deployment utilities | 🚧 Planned | - |
 
 ## 🆘 Support
+
+### Common Issues & Solutions
+
+**"Error starting tunnel: No such file or directory"**
+```bash
+# Install Session Manager plugin
+brew install --cask session-manager-plugin
+```
+
+**"psql: command not found"**
+```bash
+# Install PostgreSQL client
+brew install postgresql
+```
+
+**"Port 5432 is already in use"**
+```bash
+# The CLI will automatically suggest solutions, or use a different port
+fiftyten-db psql dev -d platform -p 5433
+```
+
+**"MFA authentication required"**
+- This is normal! The CLI will guide you through MFA setup
+- Make sure your AWS credentials are configured: `aws configure`
+
+**"Access denied" errors**
+- Check that you have the required IAM permissions (see infrastructure documentation)
+- Ensure MFA device is properly configured
+
+### Getting Help
 
 - **Documentation**: Check individual tool READMEs
 - **Issues**: [GitHub Issues](https://github.com/5010-dev/fiftyten-cli-tools/issues)
