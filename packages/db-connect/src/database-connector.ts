@@ -31,6 +31,7 @@ export class DatabaseConnector {
   private ssmClient: SSMClient;
   private mfaAuth: MfaAuthenticator;
   private region: string;
+  private mfaAuthenticated: boolean = false;
 
   constructor(region: string = 'us-west-1') {
     this.region = region;
@@ -46,8 +47,8 @@ export class DatabaseConnector {
     try {
       return await operation();
     } catch (error) {
-      // Check if this is an MFA-related error
-      if (this.mfaAuth.isMfaRequired(error)) {
+      // Check if this is an MFA-related error and we haven't already authenticated
+      if (this.mfaAuth.isMfaRequired(error) && !this.mfaAuthenticated) {
         console.log(chalk.yellow('⚠️  MFA authentication required for AWS access'));
         
         // Attempt MFA authentication
@@ -55,14 +56,25 @@ export class DatabaseConnector {
         this.mfaAuth.applyCredentials(credentials);
         
         // Recreate clients with new credentials
-        this.ec2Client = new EC2Client({ region: this.region });
-        this.ssmClient = new SSMClient({ region: this.region });
+        const clientConfig = {
+          region: this.region,
+          credentials: {
+            accessKeyId: credentials.accessKeyId,
+            secretAccessKey: credentials.secretAccessKey,
+            sessionToken: credentials.sessionToken
+          }
+        };
+        this.ec2Client = new EC2Client(clientConfig);
+        this.ssmClient = new SSMClient(clientConfig);
+        
+        // Mark as authenticated to prevent re-prompting
+        this.mfaAuthenticated = true;
         
         // Retry the operation
         return await operation();
       }
       
-      // Re-throw if not MFA-related
+      // Re-throw if not MFA-related or already authenticated
       throw error;
     }
   }
