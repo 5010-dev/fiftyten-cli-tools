@@ -11,7 +11,7 @@ A collection of command-line tools for the Fiftyten platform, designed to improv
 ## 🚀 Tools Available
 
 ### [@fiftyten/db-connect](./packages/db-connect)
-Simple CLI tool for connecting to Fiftyten databases via AWS Session Manager.
+CLI tool for database connections and DynamoDB operations via AWS Session Manager.
 
 **Quick Start:**
 ```bash
@@ -22,10 +22,12 @@ brew install postgresql awscli
 # 2. Install globally (pnpm - team standard)
 pnpm add -g @fiftyten/db-connect
 
-# 3. One command for complete database access
+# 3. Database connections
 fiftyten-db psql dev -d platform
 
-# That's it! Automatic tunnel + password + psql connection
+# 4. DynamoDB operations (sensitive fields always hidden)
+fiftyten-db dynamo list-tables
+fiftyten-db dynamo scan trading_orders --limit 10
 ```
 
 ## 📦 Installation
@@ -69,20 +71,24 @@ aws --version
 
 #### With pnpm
 ```bash
-# One-command connection
+# Database connections
 pnpm dlx @fiftyten/db-connect psql dev -d platform
-
-# Or manual tunnel
 pnpm dlx @fiftyten/db-connect tunnel dev -d platform
+
+# DynamoDB operations
+pnpm dlx @fiftyten/db-connect dynamo list-tables
+pnpm dlx @fiftyten/db-connect dynamo scan trading_orders --limit 10
 ```
 
 #### With npm
 ```bash
-# One-command connection  
+# Database connections
 npx @fiftyten/db-connect psql dev -d platform
-
-# Or manual tunnel
 npx @fiftyten/db-connect tunnel dev -d platform
+
+# DynamoDB operations
+npx @fiftyten/db-connect dynamo list-tables
+npx @fiftyten/db-connect dynamo scan trading_orders --limit 10
 ```
 
 ## 🏗️ Development
@@ -172,7 +178,9 @@ pnpm --filter package-name publish --access public
 
 ## 🎯 Usage Examples
 
-### One-Command Database Connection (Recommended)
+### Database Connections
+
+#### One-Command Connection (Recommended)
 ```bash
 # Connect to platform database with automatic password
 fiftyten-db psql dev -d platform
@@ -184,13 +192,13 @@ fiftyten-db psql dev -d copytrading
 fiftyten-db psql dev -d platform -p 5433
 ```
 
-### Database Discovery
+#### Database Discovery
 ```bash
 # See what databases are available
 fiftyten-db databases dev
 ```
 
-### Manual Tunnel Commands (Advanced)
+#### Manual Tunnel Commands (Advanced)
 ```bash
 # Create tunnel to platform database
 fiftyten-db tunnel dev -d platform
@@ -206,6 +214,33 @@ fiftyten-db info dev
 
 # List all available environments
 fiftyten-db list
+```
+
+### DynamoDB Operations
+
+#### Table Discovery
+```bash
+# List all DynamoDB tables
+fiftyten-db dynamo list-tables
+
+# Describe table structure and keys
+fiftyten-db dynamo describe fiftyten-exchange-credentials-dev
+```
+
+#### Data Operations (Sensitive Fields Always Hidden)
+```bash
+# Scan recent trading orders
+fiftyten-db dynamo scan trading_orders --limit 10
+
+# Query all credentials for tenant 5010
+fiftyten-db dynamo query fiftyten-exchange-credentials-dev "tenant_id = 5010"
+
+# Get specific item (composite key)
+fiftyten-db dynamo get-item fiftyten-exchange-credentials-dev \
+  '{"tenant_id":"5010","credential_sk":"USER#john_doe_123#PRODUCT#COPY_TRADING#EXCHANGE#gateio"}'
+
+# Get trading order details
+fiftyten-db dynamo get-item trading_orders "id:trd_5f8a2b3c4d5e6f7g8h9i"
 ```
 
 ### Team Workflow
@@ -261,6 +296,8 @@ Could not auto-discover MFA devices, using fallback detection
 **Key Features:**
 - 🚀 **One-Command Connection**: `fiftyten-db psql dev -d platform` - tunnel + password + psql automatically
 - 🔍 **Multi-Database Support**: Connect to platform, copytrading, or any configured database
+- 🗂️ **DynamoDB Operations**: List, scan, query, and get items with built-in security
+- 🔒 **Security-First Design**: Sensitive fields (API keys, secrets) always hidden
 - 🔍 **Database Discovery**: `fiftyten-db databases dev` to see what's available
 - 🔐 **Smart MFA Handling**: Auto-discovers MFA devices with single prompt
 - 🎯 **Single Device Auto-Selection** for seamless experience  
