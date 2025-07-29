@@ -5,7 +5,7 @@ import chalk from 'chalk';
 import { DatabaseConnector } from './database-connector';
 import { DynamoDBConnector } from './dynamodb-connector';
 import { MigrationManager, MigrationConfig } from './migration-manager';
-import inquirer from 'inquirer';
+import * as readline from 'readline';
 import { version } from '../package.json';
 
 const program = new Command();
@@ -336,61 +336,20 @@ Example:
         short: 'Manual Entry'
       });
       
-      // Gather migration configuration
-      const answers = await inquirer.prompt([
-        {
-          type: 'input',
-          name: 'legacyEndpoint',
-          message: 'Legacy RDS endpoint:',
-          validate: (input) => input.length > 0 || 'Endpoint is required',
-        },
-        {
-          type: 'input',
-          name: 'legacyDatabase',
-          message: 'Legacy database name:',
-          validate: (input) => input.length > 0 || 'Database name is required',
-        },
-        {
-          type: 'input',
-          name: 'legacyUsername',
-          message: 'Legacy database username:',
-          validate: (input) => input.length > 0 || 'Username is required',
-        },
-        {
-          type: 'password',
-          name: 'legacyPassword',
-          message: 'Legacy database password:',
-          validate: (input) => input.length > 0 || 'Password is required',
-        },
-        {
-          type: 'list',
-          name: 'targetSecretArn',
-          message: 'Select target database:',
-          choices: targetChoices,
-          when: targetChoices.length > 1, // Only show if we found databases or allow manual
-        },
-        {
-          type: 'input',
-          name: 'targetSecretArnManual',
-          message: 'Target database secret ARN:',
-          validate: (input) => input.startsWith('arn:aws:secretsmanager:') || 'Must be a valid Secrets Manager ARN',
-          when: (answers) => !targetChoices.length || answers.targetSecretArn === 'manual',
-        },
-        {
-          type: 'input',
-          name: 'notificationEmails',
-          message: 'Notification emails (comma-separated, optional):',
-        },
-      ]);
-
+      // Use hardcoded legacy database configuration for now
+      console.log(chalk.yellow('Using legacy database configuration:'));
+      console.log('  Endpoint: develop.cxw4cwcyepf1.us-west-1.rds.amazonaws.com');
+      console.log('  Database: indicator');
+      console.log('  Username: ogongilgong');
+      
       const config: MigrationConfig = {
         environment,
-        legacyEndpoint: answers.legacyEndpoint,
-        legacyDatabase: answers.legacyDatabase,
-        legacyUsername: answers.legacyUsername,
-        legacyPassword: answers.legacyPassword,
-        targetSecretArn: answers.targetSecretArn === 'manual' ? answers.targetSecretArnManual : (answers.targetSecretArn || answers.targetSecretArnManual),
-        notificationEmails: answers.notificationEmails ? answers.notificationEmails.split(',').map((email: string) => email.trim()) : undefined,
+        legacyEndpoint: 'develop.cxw4cwcyepf1.us-west-1.rds.amazonaws.com',
+        legacyDatabase: 'indicator',
+        legacyUsername: 'ogongilgong',
+        legacyPassword: 'F5olld4QvJ2Yx8aJMA9R',
+        targetSecretArn: targetChoices.length > 0 ? targetChoices[0].value : '',
+        notificationEmails: undefined,
       };
 
       await manager.deployMigration(config);

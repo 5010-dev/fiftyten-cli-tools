@@ -362,7 +362,7 @@ Could not auto-discover MFA devices, using fallback detection
 
 | Tool | Description | Status | Version |
 |------|-------------|--------|---------|
-| [db-toolkit](./packages/db-toolkit) | Complete database toolkit: connections, migration, operations | ✅ Active | 1.10.0 |
+| [db-toolkit](./packages/db-toolkit) | Complete database toolkit: connections, migration, operations | ✅ Active | 1.10.1 |
 | monitoring-cli | Infrastructure monitoring tools | 🚧 Planned | - |
 | deployment-helper | Deployment utilities | 🚧 Planned | - |
 

@@ -1,7 +1,49 @@
 import { STSClient, AssumeRoleCommand, GetCallerIdentityCommand, GetSessionTokenCommand } from '@aws-sdk/client-sts';
 import { IAMClient, ListMFADevicesCommand } from '@aws-sdk/client-iam';
-import inquirer from 'inquirer';
+import * as readline from 'readline';
 import chalk from 'chalk';
+
+// Helper functions for readline prompts
+function promptInput(message: string, defaultValue?: string): Promise<string> {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+  });
+
+  const prompt = defaultValue ? `${message} (${defaultValue}): ` : `${message}: `;
+  
+  return new Promise((resolve) => {
+    rl.question(prompt, (answer) => {
+      rl.close();
+      resolve(answer.trim() || defaultValue || '');
+    });
+  });
+}
+
+function promptChoice(message: string, choices: Array<{name: string, value: string}>): Promise<string> {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+  });
+
+  console.log(message);
+  choices.forEach((choice, index) => {
+    console.log(`${index + 1}. ${choice.name}`);
+  });
+
+  return new Promise((resolve) => {
+    rl.question('Select option (number): ', (answer) => {
+      rl.close();
+      const index = parseInt(answer) - 1;
+      if (index >= 0 && index < choices.length) {
+        resolve(choices[index].value);
+      } else {
+        console.log('Invalid selection, using first option');
+        resolve(choices[0].value);
+      }
+    });
+  });
+}
 
 export interface MfaCredentials {
   accessKeyId: string;
@@ -145,24 +187,16 @@ export class MfaAuthenticator {
       console.log(chalk.gray('Please provide your MFA device serial number:'));
       console.log('');
 
-      const questions = [
-        {
-          type: 'input',
-          name: 'mfaSerial',
-          message: 'MFA Device Serial Number:',
-          default: detectedConfig?.mfaSerial,
-          validate: (input: string) => {
-            if (!input || !input.startsWith('arn:aws:iam::')) {
-              return 'Please enter a valid MFA device ARN (arn:aws:iam::ACCOUNT:mfa/DEVICE_NAME)';
-            }
-            return true;
-          }
+      let mfaSerial = '';
+      while (!mfaSerial || !mfaSerial.startsWith('arn:aws:iam::')) {
+        mfaSerial = await promptInput('MFA Device Serial Number', detectedConfig?.mfaSerial);
+        if (!mfaSerial || !mfaSerial.startsWith('arn:aws:iam::')) {
+          console.log(chalk.red('Please enter a valid MFA device ARN (arn:aws:iam::ACCOUNT:mfa/DEVICE_NAME)'));
         }
-      ];
+      }
 
-      const answers = await inquirer.prompt(questions);
       return {
-        mfaSerial: answers.mfaSerial,
+        mfaSerial,
         region: this.region
       };
     } else if (availableDevices.length === 1) {
@@ -177,21 +211,14 @@ export class MfaAuthenticator {
       console.log(chalk.gray('Multiple MFA devices found. Please select one:'));
       console.log('');
 
-      const questions = [
-        {
-          type: 'list',
-          name: 'mfaSerial',
-          message: 'Select MFA Device:',
-          choices: availableDevices.map(device => ({
-            name: device.split('/').pop() + ` (${device})`,
-            value: device
-          }))
-        }
-      ];
+      const choices = availableDevices.map(device => ({
+        name: device.split('/').pop() + ` (${device})`,
+        value: device
+      }));
 
-      const answers = await inquirer.prompt(questions);
+      const mfaSerial = await promptChoice('Select MFA Device:', choices);
       return {
-        mfaSerial: answers.mfaSerial,
+        mfaSerial,
         region: this.region
       };
     }
@@ -201,21 +228,14 @@ export class MfaAuthenticator {
    * Prompt for MFA token
    */
   async promptMfaToken(): Promise<string> {
-    const answer = await inquirer.prompt([
-      {
-        type: 'input',
-        name: 'token',
-        message: 'Enter MFA token code:',
-        validate: (input: string) => {
-          if (!input || input.length !== 6 || !/^\d{6}$/.test(input)) {
-            return 'Please enter a 6-digit MFA token code';
-          }
-          return true;
-        }
+    let token = '';
+    while (!token || token.length !== 6 || !/^\d{6}$/.test(token)) {
+      token = await promptInput('Enter MFA token code');
+      if (!token || token.length !== 6 || !/^\d{6}$/.test(token)) {
+        console.log(chalk.red('Please enter a 6-digit MFA token code'));
       }
-    ]);
-
-    return answer.token;
+    }
+    return token;
   }
 
   /**

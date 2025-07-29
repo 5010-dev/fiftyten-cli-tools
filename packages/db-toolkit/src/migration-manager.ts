@@ -2,8 +2,23 @@ import { CloudFormationClient, DescribeStacksCommand, Stack } from '@aws-sdk/cli
 import { DatabaseMigrationServiceClient, DescribeReplicationTasksCommand, StartReplicationTaskCommand, StopReplicationTaskCommand, DescribeTableStatisticsCommand } from '@aws-sdk/client-database-migration-service';
 import { spawn } from 'child_process';
 import chalk from 'chalk';
-import inquirer from 'inquirer';
+import * as readline from 'readline';
 import { MfaAuthenticator } from './mfa-auth';
+
+// Helper function to prompt for confirmation
+function promptConfirmation(message: string): Promise<boolean> {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+  });
+
+  return new Promise((resolve) => {
+    rl.question(`${message} (y/N): `, (answer) => {
+      rl.close();
+      resolve(answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes');
+    });
+  });
+}
 
 export interface MigrationConfig {
   environment: string;
@@ -229,14 +244,7 @@ export class MigrationManager {
     console.log('');
 
     // Confirm deployment
-    const { confirm } = await inquirer.prompt([
-      {
-        type: 'confirm',
-        name: 'confirm',
-        message: 'Deploy migration infrastructure with these settings?',
-        default: false,
-      }
-    ]);
+    const confirm = await promptConfirmation('Deploy migration infrastructure with these settings?');
 
     if (!confirm) {
       console.log(chalk.yellow('Migration deployment cancelled.'));
@@ -346,14 +354,7 @@ export class MigrationManager {
       console.log('');
 
       // Confirm start
-      const { confirm } = await inquirer.prompt([
-        {
-          type: 'confirm',
-          name: 'confirm',
-          message: 'Start full database migration (full-load + CDC)?',
-          default: false,
-        }
-      ]);
+      const confirm = await promptConfirmation('Start full database migration (full-load + CDC)?');
 
       if (!confirm) {
         console.log(chalk.yellow('Migration start cancelled.'));
@@ -394,14 +395,7 @@ export class MigrationManager {
       const taskArn = await this.getMigrationTaskArn(environment);
       
       // Confirm stop
-      const { confirm } = await inquirer.prompt([
-        {
-          type: 'confirm',
-          name: 'confirm',
-          message: 'Stop the migration task? This will halt all data replication.',
-          default: false,
-        }
-      ]);
+      const confirm = await promptConfirmation('Stop the migration task? This will halt all data replication.');
 
       if (!confirm) {
         console.log(chalk.yellow('Migration stop cancelled.'));
@@ -676,14 +670,7 @@ export class MigrationManager {
       }
       
       // Confirm cleanup
-      const { confirm } = await inquirer.prompt([
-        {
-          type: 'confirm',
-          name: 'confirm',
-          message: 'This will destroy all migration infrastructure. Are you sure?',
-          default: false,
-        }
-      ]);
+      const confirm = await promptConfirmation('This will destroy all migration infrastructure. Are you sure?');
 
       if (!confirm) {
         console.log(chalk.yellow('Cleanup cancelled.'));
