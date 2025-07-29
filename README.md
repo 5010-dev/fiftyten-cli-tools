@@ -1,7 +1,7 @@
 # Fiftyten CLI Tools
 
 [![Publish Status](https://github.com/5010-dev/fiftyten-cli-tools/workflows/Publish%20CLI%20Tools/badge.svg)](https://github.com/5010-dev/fiftyten-cli-tools/actions)
-[![npm version](https://badge.fury.io/js/%40fiftyten%2Fdb-connect.svg)](https://badge.fury.io/js/%40fiftyten%2Fdb-connect)
+[![npm version](https://badge.fury.io/js/%40fiftyten%2Fdb-toolkit.svg)](https://badge.fury.io/js/%40fiftyten%2Fdb-toolkit)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Node.js Version](https://img.shields.io/badge/node-%3E%3D16.0.0-brightgreen.svg)](https://nodejs.org/)
 [![pnpm](https://img.shields.io/badge/pnpm-%3E%3D8.0.0-blue.svg)](https://pnpm.io/)
@@ -10,8 +10,8 @@ A collection of command-line tools for the Fiftyten platform, designed to improv
 
 ## 🚀 Tools Available
 
-### [@fiftyten/db-connect](./packages/db-connect)
-CLI tool for database connections and DynamoDB operations via AWS Session Manager.
+### [@fiftyten/db-toolkit](./packages/db-toolkit)
+Complete database toolkit: connections, migration, and operations via AWS Session Manager.
 
 **Quick Start:**
 ```bash
@@ -20,14 +20,18 @@ brew install --cask session-manager-plugin
 brew install postgresql awscli
 
 # 2. Install globally (pnpm - team standard)
-pnpm add -g @fiftyten/db-connect
+pnpm add -g @fiftyten/db-toolkit
 
 # 3. Database connections
-fiftyten-db psql dev -d platform
+fiftyten-db psql dev -d indicator
 
 # 4. DynamoDB operations (sensitive fields always hidden)
 fiftyten-db dynamo list-tables
 fiftyten-db dynamo scan trading_orders --limit 10
+
+# 5. Database migration (full migration with AWS DMS)
+fiftyten-db migrate deploy dev
+fiftyten-db migrate start dev
 ```
 
 ## 📦 Installation
@@ -50,12 +54,12 @@ brew install awscli
 
 #### With pnpm (Team Standard)
 ```bash
-pnpm add -g @fiftyten/db-connect
+pnpm add -g @fiftyten/db-toolkit
 ```
 
 #### With npm
 ```bash
-npm install -g @fiftyten/db-connect
+npm install -g @fiftyten/db-toolkit
 ```
 
 ### Quick Setup Verification
@@ -72,23 +76,23 @@ aws --version
 #### With pnpm
 ```bash
 # Database connections
-pnpm dlx @fiftyten/db-connect psql dev -d platform
-pnpm dlx @fiftyten/db-connect tunnel dev -d platform
+pnpm dlx @fiftyten/db-toolkit psql dev -d platform
+pnpm dlx @fiftyten/db-toolkit tunnel dev -d platform
 
 # DynamoDB operations
-pnpm dlx @fiftyten/db-connect dynamo list-tables
-pnpm dlx @fiftyten/db-connect dynamo scan trading_orders --limit 10
+pnpm dlx @fiftyten/db-toolkit dynamo list-tables
+pnpm dlx @fiftyten/db-toolkit dynamo scan trading_orders --limit 10
 ```
 
 #### With npm
 ```bash
 # Database connections
-npx @fiftyten/db-connect psql dev -d platform
-npx @fiftyten/db-connect tunnel dev -d platform
+npx @fiftyten/db-toolkit psql dev -d platform
+npx @fiftyten/db-toolkit tunnel dev -d platform
 
 # DynamoDB operations
-npx @fiftyten/db-connect dynamo list-tables
-npx @fiftyten/db-connect dynamo scan trading_orders --limit 10
+npx @fiftyten/db-toolkit dynamo list-tables
+npx @fiftyten/db-toolkit dynamo scan trading_orders --limit 10
 ```
 
 ## 🏗️ Development
@@ -110,13 +114,13 @@ pnpm test
 ### Working with Packages
 ```bash
 # Install dependencies for specific package
-pnpm --filter db-connect install
+pnpm --filter db-toolkit install
 
 # Build specific package
-pnpm --filter db-connect build
+pnpm --filter db-toolkit build
 
 # Run specific package
-pnpm --filter db-connect dev
+pnpm --filter db-toolkit dev
 ```
 
 ### Adding New Tools
@@ -182,14 +186,14 @@ pnpm --filter package-name publish --access public
 
 #### One-Command Connection (Recommended)
 ```bash
-# Connect to platform database with automatic password
-fiftyten-db psql dev -d platform
+# Connect to indicator database with automatic password
+fiftyten-db psql dev -d indicator
 
 # Connect to copy trading database  
 fiftyten-db psql dev -d copytrading
 
 # Use different port if needed
-fiftyten-db psql dev -d platform -p 5433
+fiftyten-db psql dev -d indicator -p 5433
 ```
 
 #### Database Discovery
@@ -200,8 +204,8 @@ fiftyten-db databases dev
 
 #### Manual Tunnel Commands (Advanced)
 ```bash
-# Create tunnel to platform database
-fiftyten-db tunnel dev -d platform
+# Create tunnel to indicator database
+fiftyten-db tunnel dev -d indicator
 
 # Connect directly to copytrading database
 fiftyten-db connect main -d copytrading
@@ -215,6 +219,38 @@ fiftyten-db info dev
 # List all available environments
 fiftyten-db list
 ```
+
+### Database Migration
+
+Complete database migration using AWS DMS with full-load + change data capture (CDC).
+
+#### Migration Workflow
+```bash
+# 1. Deploy migration infrastructure (prompts for legacy DB details)
+fiftyten-db migrate deploy dev
+
+# 2. Start full migration (full-load + CDC)
+fiftyten-db migrate start dev
+
+# 3. Monitor progress
+fiftyten-db migrate status dev
+
+# 4. Validate migration data
+fiftyten-db migrate validate dev
+
+# 5. Stop migration when ready for cutover
+fiftyten-db migrate stop dev
+
+# 6. Cleanup resources after successful migration
+fiftyten-db migrate cleanup dev
+```
+
+#### Migration Features
+- **Full Load**: Migrates all existing data from legacy database
+- **Change Data Capture (CDC)**: Real-time replication of ongoing changes
+- **Progress Monitoring**: Table-by-table statistics and error tracking
+- **Data Validation**: Comprehensive validation with recommendations
+- **Security**: Legacy credentials never stored, uses Secrets Manager for target
 
 ### DynamoDB Operations
 
@@ -246,16 +282,16 @@ fiftyten-db dynamo get-item trading_orders "id:trd_5f8a2b3c4d5e6f7g8h9i"
 ### Team Workflow
 ```bash
 # 1. Install once globally with pnpm
-pnpm add -g @fiftyten/db-connect
+pnpm add -g @fiftyten/db-toolkit
 
 # 2. One command for complete database access (recommended)
-fiftyten-db psql dev -d platform
+fiftyten-db psql dev -d indicator
 
 # Alternative: Manual tunnel approach
 # 2a. Create tunnel (will prompt for MFA if required)
-fiftyten-db tunnel dev -d platform
+fiftyten-db tunnel dev -d indicator
 # 2b. In another terminal, use psql
-psql -h localhost -p 5433 -d platform -U fiftyten
+psql -h localhost -p 5433 -d indicator_db -U fiftyten
 ```
 
 ### MFA Authentication
@@ -294,8 +330,9 @@ Could not auto-discover MFA devices, using fallback detection
 ```
 
 **Key Features:**
-- 🚀 **One-Command Connection**: `fiftyten-db psql dev -d platform` - tunnel + password + psql automatically
-- 🔍 **Multi-Database Support**: Connect to platform, copytrading, or any configured database
+- 🚀 **One-Command Connection**: `fiftyten-db psql dev -d indicator` - tunnel + password + psql automatically
+- 🔍 **Multi-Database Support**: Connect to indicator, copytrading, or any configured database
+- 📦 **Database Migration**: Full migration with AWS DMS (full-load + CDC)
 - 🗂️ **DynamoDB Operations**: List, scan, query, and get items with built-in security
 - 🔒 **Security-First Design**: Sensitive fields (API keys, secrets) always hidden
 - 🔍 **Database Discovery**: `fiftyten-db databases dev` to see what's available
@@ -325,7 +362,7 @@ Could not auto-discover MFA devices, using fallback detection
 
 | Tool | Description | Status | Version |
 |------|-------------|--------|---------|
-| [db-connect](./packages/db-connect) | Multi-database connection via Session Manager | ✅ Active | 1.8.0 |
+| [db-toolkit](./packages/db-toolkit) | Complete database toolkit: connections, migration, operations | ✅ Active | 1.9.0 |
 | monitoring-cli | Infrastructure monitoring tools | 🚧 Planned | - |
 | deployment-helper | Deployment utilities | 🚧 Planned | - |
 
@@ -348,7 +385,7 @@ brew install postgresql
 **"Port 5432 is already in use"**
 ```bash
 # The CLI will automatically suggest solutions, or use a different port
-fiftyten-db psql dev -d platform -p 5433
+fiftyten-db psql dev -d indicator -p 5433
 ```
 
 **"MFA authentication required"**

@@ -177,9 +177,9 @@ export class DatabaseConnector {
   /**
    * Get database information from SSM
    */
-  private async getDatabaseInfo(environment: string, database: string = 'platform'): Promise<DatabaseInfo> {
-    const parameterName = database === 'platform' 
-      ? `/indicator/platform-api/${environment}/database-environment-variables`
+  private async getDatabaseInfo(environment: string, database: string = 'indicator'): Promise<DatabaseInfo> {
+    const parameterName = database === 'indicator' 
+      ? `/indicator/indicator-api/${environment}/database-environment-variables`
       : `/indicator/${database}-api/${environment}/database-environment-variables`;
 
     const response = await this.callWithMfaRetry(async () => {
@@ -199,7 +199,7 @@ export class DatabaseConnector {
   /**
    * Get database password from Secrets Manager
    */
-  async getDatabasePassword(environment: string, database: string = 'platform'): Promise<string> {
+  async getDatabasePassword(environment: string, database: string = 'indicator'): Promise<string> {
     const dbInfo = await this.getDatabaseInfo(environment, database);
     
     const command = new GetSecretValueCommand({
@@ -221,7 +221,7 @@ export class DatabaseConnector {
   /**
    * Create SSH tunnel to database via Session Manager
    */
-  async createTunnel(environment: string, database: string = 'platform', localPort: number = 5433): Promise<void> {
+  async createTunnel(environment: string, database: string = 'indicator', localPort: number = 5433): Promise<void> {
     console.log(chalk.blue('🔗 Creating database tunnel via Session Manager...'));
     
     const instanceId = await this.getBastionInstanceId(environment);
@@ -294,7 +294,7 @@ export class DatabaseConnector {
   /**
    * Connect directly to database via Session Manager
    */
-  async connectDatabase(environment: string, database: string = 'platform'): Promise<void> {
+  async connectDatabase(environment: string, database: string = 'indicator'): Promise<void> {
     console.log(chalk.blue('🔗 Connecting to database via Session Manager...'));
     
     const instanceId = await this.getBastionInstanceId(environment);
@@ -448,10 +448,10 @@ export class DatabaseConnector {
     }
 
     console.log(chalk.gray('Usage examples:'));
-    console.log(chalk.cyan('  fiftyten-db tunnel dev -d platform     # Create tunnel to platform database'));
+    console.log(chalk.cyan('  fiftyten-db tunnel dev -d indicator     # Create tunnel to indicator database'));
     console.log(chalk.cyan('  fiftyten-db connect main -d copytrading # Connect to copytrading database'));
     console.log(chalk.cyan('  fiftyten-db ssh dev                     # SSH into dev bastion host'));
-    console.log(chalk.cyan('  fiftyten-db psql dev -d platform        # Connect with automatic password'));
+    console.log(chalk.cyan('  fiftyten-db psql dev -d indicator        # Connect with automatic password'));
   }
 
   /**
@@ -461,7 +461,7 @@ export class DatabaseConnector {
     console.log(chalk.blue(`🔍 Discovering available databases for ${environment.toUpperCase()}...`));
     console.log('');
 
-    const databases = ['platform', 'copytrading']; // Common database types
+    const databases = ['indicator', 'copytrading']; // Common database types
     const available: string[] = [];
 
     for (const database of databases) {
@@ -488,7 +488,7 @@ export class DatabaseConnector {
   /**
    * Connect to database with automatic tunnel and password retrieval
    */
-  async connectWithPassword(environment: string, database: string = 'platform', localPort: number = 5433): Promise<void> {
+  async connectWithPassword(environment: string, database: string = 'indicator', localPort: number = 5433): Promise<void> {
     console.log(chalk.blue('🔗 Setting up complete database connection...'));
     
     try {

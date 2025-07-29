@@ -1,11 +1,10 @@
 {
-  "name": "@fiftyten/db-connect",
+  "name": "@fiftyten/db-toolkit",
   "version": "1.9.0",
-  "description": "CLI tool for database connections and DynamoDB operations via AWS Session Manager",
+  "description": "Complete database toolkit: connections, migration, and operations via AWS Session Manager",
   "main": "index.js",
   "bin": {
-    "fiftyten-db": "./bin/fiftyten-db.js",
-    "db-connect": "./bin/fiftyten-db.js"
+    "fiftyten-db": "./bin/fiftyten-db.js"
   },
   "scripts": {
     "build": "tsc",
@@ -18,6 +17,8 @@
     "database",
     "aws",
     "session-manager",
+    "migration",
+    "dms",
     "cli"
   ],
   "author": "5010 Technologies Team",
@@ -32,6 +33,8 @@
     "@aws-sdk/client-secrets-manager": "^3.0.0",
     "@aws-sdk/client-dynamodb": "^3.0.0",
     "@aws-sdk/lib-dynamodb": "^3.0.0",
+    "@aws-sdk/client-cloudformation": "^3.0.0",
+    "@aws-sdk/client-database-migration-service": "^3.0.0",
     "inquirer": "^9.0.0"
   },
   "devDependencies": {
@@ -45,7 +48,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/5010-dev/fiftyten-cli-tools.git",
-    "directory": "packages/db-connect"
+    "directory": "packages/db-toolkit"
   },
   "publishConfig": {
     "access": "public"

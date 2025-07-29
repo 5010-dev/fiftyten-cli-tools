@@ -8,12 +8,12 @@ This is a TypeScript monorepo containing CLI tools for the Fiftyten platform eco
 
 ### Architecture
 - **Monorepo Structure**: pnpm workspaces with packages in `packages/` directory
-- **Primary Tool**: `@fiftyten/db-connect` - AWS Session Manager-based database connectivity tool
+- **Primary Tool**: `@fiftyten/db-toolkit` - AWS Session Manager-based database toolkit
 - **Target Deployment**: Published to npm as scoped packages under `@fiftyten/`
 - **AWS Integration**: Heavy use of AWS SDK v3 (EC2, SSM, Secrets Manager, IAM)
 
 ### Current Packages
-- **db-connect**: Database connection tool with MFA support, automatic password retrieval, and port conflict detection
+- **db-toolkit**: Complete database toolkit with connections, migration, MFA support, and DynamoDB operations
 
 ## Development Commands
 
@@ -41,21 +41,21 @@ pnpm clean
 ### Package-Specific Development
 ```bash
 # Work with specific package
-pnpm --filter db-connect build
-pnpm --filter db-connect dev         # Watch mode compilation
-pnpm --filter db-connect test
+pnpm --filter db-toolkit build
+pnpm --filter db-toolkit dev         # Watch mode compilation
+pnpm --filter db-toolkit test
 
 # Install dependencies for specific package
-pnpm --filter db-connect install <package>
+pnpm --filter db-toolkit install <package>
 ```
 
 ### Testing CLI Tools
 ```bash
 # Test db-connect locally after building
-node packages/db-connect/bin/fiftyten-db.js --help
+node packages/db-toolkit/bin/fiftyten-db.js --help
 
 # Test with pnpm dlx (without global install)
-pnpm dlx @fiftyten/db-connect psql dev -d platform
+pnpm dlx @fiftyten/db-toolkit psql dev -d indicator
 ```
 
 ### Publishing
@@ -64,7 +64,7 @@ pnpm dlx @fiftyten/db-connect psql dev -d platform
 pnpm publish-packages
 
 # Publish specific package
-pnpm --filter db-connect publish --access public
+pnpm --filter db-toolkit publish --access public
 ```
 
 ## Code Architecture

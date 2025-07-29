@@ -14,7 +14,7 @@
   },
   "references": [
     {
-      "path": "./packages/db-connect"
+      "path": "./packages/db-toolkit"
     }
   ]
 }

@@ -4,6 +4,8 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import { DatabaseConnector } from './database-connector';
 import { DynamoDBConnector } from './dynamodb-connector';
+import { MigrationManager, MigrationConfig } from './migration-manager';
+import inquirer from 'inquirer';
 import { version } from '../package.json';
 
 const program = new Command();
@@ -19,7 +21,7 @@ program
   .description('Create SSH tunnel to database via Session Manager')
   .argument('<environment>', 'Environment (dev/main)')
   .option('-p, --port <port>', 'Local port for tunnel', '5433')
-  .option('-d, --database <app>', 'Application database (platform, copytrading, etc.)', 'platform')
+  .option('-d, --database <app>', 'Application database (indicator, copytrading, etc.)', 'indicator')
   .option('--region <region>', 'AWS region', 'us-west-1')
   .action(async (environment, options) => {
     try {
@@ -36,7 +38,7 @@ program
   .command('connect')
   .description('Connect directly to database via Session Manager')
   .argument('<environment>', 'Environment (dev/main)')
-  .option('-d, --database <app>', 'Application database (platform, copytrading, etc.)', 'platform')
+  .option('-d, --database <app>', 'Application database (indicator, copytrading, etc.)', 'indicator')
   .option('--region <region>', 'AWS region', 'us-west-1')
   .action(async (environment, options) => {
     try {
@@ -101,7 +103,7 @@ program
   .description('Connect to database with automatic tunnel and password retrieval')
   .argument('<environment>', 'Environment (dev/main)')
   .option('-p, --port <port>', 'Local port for tunnel', '5433')
-  .option('-d, --database <app>', 'Application database (platform, copytrading, etc.)', 'platform')
+  .option('-d, --database <app>', 'Application database (indicator, copytrading, etc.)', 'indicator')
   .option('--region <region>', 'AWS region', 'us-west-1')
   .action(async (environment, options) => {
     try {
@@ -134,7 +136,7 @@ program
   .command('password')
   .description('Get database password for manual configuration')
   .argument('<environment>', 'Environment (dev/main)')
-  .option('-d, --database <app>', 'Application database (platform, copytrading, etc.)', 'platform')
+  .option('-d, --database <app>', 'Application database (indicator, copytrading, etc.)', 'indicator')
   .option('--region <region>', 'AWS region', 'us-west-1')
   .action(async (environment, options) => {
     try {
@@ -144,7 +146,7 @@ program
       console.log(chalk.yellow(password));
       console.log('');
       console.log(chalk.gray('💡 DATABASE_URL for manual configuration:'));
-      console.log(chalk.cyan(`DATABASE_URL=postgres://fiftyten:${password}@localhost:5433/${options.database === 'platform' ? 'platform' : options.database}`));
+      console.log(chalk.cyan(`DATABASE_URL=postgres://fiftyten:${password}@localhost:5433/indicator_db`));
     } catch (error) {
       console.error(chalk.red('Error retrieving password:'), error instanceof Error ? error.message : String(error));
       process.exit(1);
@@ -280,6 +282,285 @@ Examples:
       await connector.getItem(tableName, key);
     } catch (error) {
       console.error(chalk.red('Error getting item:'), error instanceof Error ? error.message : String(error));
+      process.exit(1);
+    }
+  });
+
+// Migration commands
+const migrateCommand = program
+  .command('migrate')
+  .description('Database migration operations using AWS DMS (full migration: full-load + CDC)');
+
+// Deploy migration infrastructure
+migrateCommand
+  .command('deploy')
+  .description('Deploy DMS migration infrastructure for full database migration')
+  .argument('<environment>', 'Environment (dev/main)')
+  .option('--region <region>', 'AWS region', 'us-west-1')
+  .addHelpText('after', `
+Migration Type: ${chalk.yellow('full-load-and-cdc')} (Complete migration + ongoing replication)
+
+This command will prompt you for:
+  • Legacy database endpoint and credentials
+  • Target database secret ARN
+  • Notification email addresses (optional)
+
+Example:
+  ${chalk.cyan('fiftyten-db migrate deploy dev')}`)
+  .action(async (environment, options) => {
+    try {
+      const manager = new MigrationManager(options.region);
+      
+      console.log(chalk.blue('🔧 Database Migration Setup'));
+      console.log('');
+      console.log(chalk.green('This will deploy AWS DMS infrastructure for full database migration:'));
+      console.log(chalk.gray('  • Full load of all existing data'));
+      console.log(chalk.gray('  • Change Data Capture (CDC) for ongoing replication'));
+      console.log(chalk.gray('  • CloudWatch monitoring and SNS alerts'));
+      console.log('');
+      
+      // Discover available target databases
+      const targetDatabases = await manager.discoverTargetDatabases(environment);
+      
+      // Prepare target database selection
+      const targetChoices = targetDatabases.map(db => ({
+        name: `${db.friendlyName} (${db.name})`,
+        value: db.secretArn,
+        short: db.friendlyName
+      }));
+      
+      // Add manual entry option
+      targetChoices.push({
+        name: 'Enter target database ARN manually',
+        value: 'manual',
+        short: 'Manual Entry'
+      });
+      
+      // Gather migration configuration
+      const answers = await inquirer.prompt([
+        {
+          type: 'input',
+          name: 'legacyEndpoint',
+          message: 'Legacy RDS endpoint:',
+          validate: (input) => input.length > 0 || 'Endpoint is required',
+        },
+        {
+          type: 'input',
+          name: 'legacyDatabase',
+          message: 'Legacy database name:',
+          validate: (input) => input.length > 0 || 'Database name is required',
+        },
+        {
+          type: 'input',
+          name: 'legacyUsername',
+          message: 'Legacy database username:',
+          validate: (input) => input.length > 0 || 'Username is required',
+        },
+        {
+          type: 'password',
+          name: 'legacyPassword',
+          message: 'Legacy database password:',
+          validate: (input) => input.length > 0 || 'Password is required',
+        },
+        {
+          type: 'list',
+          name: 'targetSecretArn',
+          message: 'Select target database:',
+          choices: targetChoices,
+          when: targetChoices.length > 1, // Only show if we found databases or allow manual
+        },
+        {
+          type: 'input',
+          name: 'targetSecretArnManual',
+          message: 'Target database secret ARN:',
+          validate: (input) => input.startsWith('arn:aws:secretsmanager:') || 'Must be a valid Secrets Manager ARN',
+          when: (answers) => !targetChoices.length || answers.targetSecretArn === 'manual',
+        },
+        {
+          type: 'input',
+          name: 'notificationEmails',
+          message: 'Notification emails (comma-separated, optional):',
+        },
+      ]);
+
+      const config: MigrationConfig = {
+        environment,
+        legacyEndpoint: answers.legacyEndpoint,
+        legacyDatabase: answers.legacyDatabase,
+        legacyUsername: answers.legacyUsername,
+        legacyPassword: answers.legacyPassword,
+        targetSecretArn: answers.targetSecretArn === 'manual' ? answers.targetSecretArnManual : (answers.targetSecretArn || answers.targetSecretArnManual),
+        notificationEmails: answers.notificationEmails ? answers.notificationEmails.split(',').map((email: string) => email.trim()) : undefined,
+      };
+
+      await manager.deployMigration(config);
+    } catch (error) {
+      console.error(chalk.red('Error deploying migration:'), error instanceof Error ? error.message : String(error));
+      process.exit(1);
+    }
+  });
+
+// Start migration task
+migrateCommand
+  .command('start')
+  .description('Start the database migration task (full-load + CDC)')
+  .argument('<environment>', 'Environment (dev/main)')
+  .option('--region <region>', 'AWS region', 'us-west-1')
+  .addHelpText('after', `
+Starts full database migration:
+  1. ${chalk.yellow('Full Load')}: Migrates all existing data
+  2. ${chalk.yellow('CDC')}: Captures ongoing changes for real-time replication
+
+Example:
+  ${chalk.cyan('fiftyten-db migrate start dev')}`)
+  .action(async (environment, options) => {
+    try {
+      const manager = new MigrationManager(options.region);
+      await manager.startMigration(environment);
+    } catch (error) {
+      console.error(chalk.red('Error starting migration:'), error instanceof Error ? error.message : String(error));
+      process.exit(1);
+    }
+  });
+
+// Stop migration task
+migrateCommand
+  .command('stop')
+  .description('Stop the database migration task')
+  .argument('<environment>', 'Environment (dev/main)')
+  .option('--region <region>', 'AWS region', 'us-west-1')
+  .addHelpText('after', `
+Stops the migration task and halts all data replication.
+Use this when ready to cutover to the new database.
+
+Example:
+  ${chalk.cyan('fiftyten-db migrate stop dev')}`)
+  .action(async (environment, options) => {
+    try {
+      const manager = new MigrationManager(options.region);
+      await manager.stopMigration(environment);
+    } catch (error) {
+      console.error(chalk.red('Error stopping migration:'), error instanceof Error ? error.message : String(error));
+      process.exit(1);
+    }
+  });
+
+// Show migration status
+migrateCommand
+  .command('status')
+  .description('Show migration task status and progress')
+  .argument('<environment>', 'Environment (dev/main)')
+  .option('--region <region>', 'AWS region', 'us-west-1')
+  .addHelpText('after', `
+Shows detailed migration progress including:
+  • Task status (running, stopped, failed)
+  • Overall progress percentage
+  • Table-by-table statistics
+  • Row counts and error counts
+
+Example:
+  ${chalk.cyan('fiftyten-db migrate status dev')}`)
+  .action(async (environment, options) => {
+    try {
+      const manager = new MigrationManager(options.region);
+      await manager.showMigrationStatus(environment);
+    } catch (error) {
+      console.error(chalk.red('Error getting migration status:'), error instanceof Error ? error.message : String(error));
+      process.exit(1);
+    }
+  });
+
+// Validate migration
+migrateCommand
+  .command('validate')
+  .description('Validate migration data and provide recommendations')
+  .argument('<environment>', 'Environment (dev/main)')
+  .option('--region <region>', 'AWS region', 'us-west-1')
+  .addHelpText('after', `
+Provides comprehensive migration validation:
+  • Data completion rates
+  • Error analysis
+  • Table-by-table status
+  • Recommendations for next steps
+
+Example:
+  ${chalk.cyan('fiftyten-db migrate validate dev')}`)
+  .action(async (environment, options) => {
+    try {
+      const manager = new MigrationManager(options.region);
+      await manager.validateMigration(environment);
+    } catch (error) {
+      console.error(chalk.red('Error validating migration:'), error instanceof Error ? error.message : String(error));
+      process.exit(1);
+    }
+  });
+
+// List available target databases
+migrateCommand
+  .command('targets')
+  .description('List available target databases for migration')
+  .argument('<environment>', 'Environment (dev/main)')
+  .option('--region <region>', 'AWS region', 'us-west-1')
+  .addHelpText('after', `
+Shows available target databases discovered from storage infrastructure:
+  • Database name and friendly name
+  • Secret ARN for migration setup
+  • Endpoint and port information
+
+Example:
+  ${chalk.cyan('fiftyten-db migrate targets dev')}`)
+  .action(async (environment, options) => {
+    try {
+      const manager = new MigrationManager(options.region);
+      const targetDatabases = await manager.discoverTargetDatabases(environment);
+      
+      if (targetDatabases.length === 0) {
+        console.log(chalk.yellow('No target databases found.'));
+        console.log(chalk.gray('Deploy storage infrastructure first with databases enabled.'));
+        return;
+      }
+
+      console.log(chalk.blue(`📋 Available Target Databases - ${environment.toUpperCase()}`));
+      console.log('');
+      
+      targetDatabases.forEach(db => {
+        console.log(chalk.green(`🗄️  ${db.friendlyName}`));
+        console.log(`   Name: ${chalk.yellow(db.name)}`);
+        console.log(`   Secret ARN: ${chalk.gray(db.secretArn)}`);
+        if (db.endpoint) {
+          console.log(`   Endpoint: ${chalk.cyan(db.endpoint + ':' + db.port)}`);
+        }
+        console.log('');
+      });
+      
+    } catch (error) {
+      console.error(chalk.red('Error listing target databases:'), error instanceof Error ? error.message : String(error));
+      process.exit(1);
+    }
+  });
+
+// Cleanup migration infrastructure
+migrateCommand
+  .command('cleanup')
+  .description('Destroy migration infrastructure after successful migration')
+  .argument('<environment>', 'Environment (dev/main)')
+  .option('--region <region>', 'AWS region', 'us-west-1')
+  .addHelpText('after', `
+⚠️  This destroys all DMS migration resources:
+  • DMS replication instance
+  • Migration tasks and endpoints
+  • CloudWatch logs and alarms
+
+Only run this after successful migration and application cutover.
+
+Example:
+  ${chalk.cyan('fiftyten-db migrate cleanup dev')}`)
+  .action(async (environment, options) => {
+    try {
+      const manager = new MigrationManager(options.region);
+      await manager.cleanupMigration(environment);
+    } catch (error) {
+      console.error(chalk.red('Error cleaning up migration:'), error instanceof Error ? error.message : String(error));
       process.exit(1);
     }
   });
