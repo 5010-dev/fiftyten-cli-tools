@@ -1,7 +1,7 @@
 # Fiftyten CLI Tools
 
 [![Publish Status](https://github.com/5010-dev/fiftyten-cli-tools/workflows/Publish%20CLI%20Tools/badge.svg)](https://github.com/5010-dev/fiftyten-cli-tools/actions)
-[![npm version](https://badge.fury.io/js/%40fiftyten%2Fdb-toolkit.svg)](https://badge.fury.io/js/%40fiftyten%2Fdb-toolkit)
+[![npm version](https://img.shields.io/npm/v/@fiftyten/db-toolkit.svg)](https://www.npmjs.com/package/@fiftyten/db-toolkit)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Node.js Version](https://img.shields.io/badge/node-%3E%3D16.0.0-brightgreen.svg)](https://nodejs.org/)
 [![pnpm](https://img.shields.io/badge/pnpm-%3E%3D8.0.0-blue.svg)](https://pnpm.io/)
@@ -13,6 +13,8 @@ A collection of command-line tools for the Fiftyten platform, designed to improv
 ### [@fiftyten/db-toolkit](./packages/db-toolkit)
 Complete database toolkit: connections, migration, and operations via AWS Session Manager.
 
+**🚀 NEW v2.0.0**: Completely standalone CLI with embedded infrastructure templates!
+
 **Quick Start:**
 ```bash
 # 1. Install prerequisites (one-time setup)
@@ -20,17 +22,20 @@ brew install --cask session-manager-plugin
 brew install postgresql awscli
 
 # 2. Install globally (pnpm - team standard)
-pnpm add -g @fiftyten/db-toolkit
+pnpm add -g @fiftyten/db-toolkit@2.0.0
 
-# 3. Database connections
+# 3. Apply IAM permissions (one-time, see documentation)
+# Attach DMSMigrationDeploymentAccess policy to your user/group
+
+# 4. Database connections (unchanged)
 fiftyten-db psql dev -d indicator
 
-# 4. DynamoDB operations (sensitive fields always hidden)
+# 5. DynamoDB operations (unchanged, sensitive fields always hidden)
 fiftyten-db dynamo list-tables
 fiftyten-db dynamo scan trading_orders --limit 10
 
-# 5. Database migration (full migration with AWS DMS)
-fiftyten-db migrate deploy dev
+# 6. Database migration (now 100% standalone!)
+fiftyten-db migrate deploy dev   # No local repos required!
 fiftyten-db migrate start dev
 ```
 
@@ -54,12 +59,12 @@ brew install awscli
 
 #### With pnpm (Team Standard)
 ```bash
-pnpm add -g @fiftyten/db-toolkit
+pnpm add -g @fiftyten/db-toolkit@2.0.0
 ```
 
 #### With npm
 ```bash
-npm install -g @fiftyten/db-toolkit
+npm install -g @fiftyten/db-toolkit@2.0.0
 ```
 
 ### Quick Setup Verification
@@ -220,13 +225,24 @@ fiftyten-db info dev
 fiftyten-db list
 ```
 
-### Database Migration
+### Database Migration (v2.0.0 - Standalone!)
 
 Complete database migration using AWS DMS with full-load + change data capture (CDC).
 
+**🚀 NEW**: Completely standalone - no local repository dependencies required!
+
+#### Prerequisites for Migration (v2.0.0)
+```bash
+# 1. Ensure you have the required IAM permissions
+# Apply DMSMigrationDeploymentAccess policy (see documentation)
+
+# 2. Install latest CLI version
+pnpm add -g @fiftyten/db-toolkit@2.0.0
+```
+
 #### Migration Workflow
 ```bash
-# 1. Deploy migration infrastructure (prompts for legacy DB details)
+# 1. Deploy migration infrastructure (now 100% standalone!)
 fiftyten-db migrate deploy dev
 
 # 2. Start full migration (full-load + CDC)
@@ -246,6 +262,9 @@ fiftyten-db migrate cleanup dev
 ```
 
 #### Migration Features
+- **🚀 Standalone Architecture**: No local storage infrastructure repository required
+- **📦 Embedded Templates**: CloudFormation templates built into CLI
+- **🔍 Auto-Discovery**: Automatically discovers VPC and subnet configuration
 - **Full Load**: Migrates all existing data from legacy database
 - **Change Data Capture (CDC)**: Real-time replication of ongoing changes
 - **Progress Monitoring**: Table-by-table statistics and error tracking
@@ -362,7 +381,7 @@ Could not auto-discover MFA devices, using fallback detection
 
 | Tool | Description | Status | Version |
 |------|-------------|--------|---------|
-| [db-toolkit](./packages/db-toolkit) | Complete database toolkit: connections, migration, operations | ✅ Active | 1.10.1 |
+| [db-toolkit](./packages/db-toolkit) | Complete database toolkit: connections, migration, operations | ✅ Active | 2.0.0 |
 | monitoring-cli | Infrastructure monitoring tools | 🚧 Planned | - |
 | deployment-helper | Deployment utilities | 🚧 Planned | - |
 

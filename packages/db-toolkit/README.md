@@ -1,18 +1,28 @@
 # @fiftyten/db-toolkit
 
-[![npm version](https://badge.fury.io/js/%40fiftyten%2Fdb-toolkit.svg)](https://www.npmjs.com/package/@fiftyten/db-toolkit)
+[![npm version](https://img.shields.io/npm/v/@fiftyten/db-toolkit.svg)](https://www.npmjs.com/package/@fiftyten/db-toolkit)
 [![Downloads](https://img.shields.io/npm/dm/@fiftyten/db-toolkit.svg)](https://npmjs.org/package/@fiftyten/db-toolkit)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![AWS](https://img.shields.io/badge/AWS-232F3E?logo=amazon-aws&logoColor=white)](https://aws.amazon.com/)
 
-Simple CLI tool for connecting to Fiftyten databases via AWS Session Manager.
+Complete database toolkit: connections, migration, and operations via AWS Session Manager.
+
+## 🚀 NEW v2.0.0: Standalone Architecture
+
+**BREAKING CHANGE**: Major architectural improvement - completely standalone CLI!
+
+### What's New
+- **🚀 Standalone Migration**: No local repository dependencies required
+- **📦 Embedded Infrastructure**: CloudFormation templates built into CLI
+- **🔍 Auto-Discovery**: VPC and subnet configuration discovered automatically
+- **⚡ Direct API Calls**: Eliminates CDK spawn processes and PATH issues
 
 ## Features
 
 ✅ **One-Command Connection** - `fiftyten-db psql dev -d indicator` - tunnel + password + psql automatically  
 ✅ **Multi-Database Support** - Connect to indicator, copytrading, or any configured database  
-✅ **Database Migration** - Full migration with AWS DMS (full-load + CDC)  
+✅ **🚀 Standalone Migration** - Full migration with AWS DMS (full-load + CDC) - no local repos required!  
 ✅ **Automatic Password Retrieval** - No manual password lookup required  
 ✅ **Intelligent Port Conflict Detection** - Auto-suggests available ports  
 ✅ **Smart MFA Handling** - Auto-discovers MFA devices with single prompt  
@@ -25,25 +35,27 @@ Simple CLI tool for connecting to Fiftyten databases via AWS Session Manager.
 
 ```bash
 # With pnpm (team standard)
-pnpm add -g @fiftyten/db-toolkit
+pnpm add -g @fiftyten/db-toolkit@2.0.0
 
 # With npm
-npm install -g @fiftyten/db-toolkit
+npm install -g @fiftyten/db-toolkit@2.0.0
 ```
 
 ### One-time Usage
 
 ```bash
 # With pnpm
-pnpm dlx @fiftyten/db-toolkit psql dev -d indicator
+pnpm dlx @fiftyten/db-toolkit@2.0.0 psql dev -d indicator
 
 # With npm
-npx @fiftyten/db-toolkit psql dev -d indicator
+npx @fiftyten/db-toolkit@2.0.0 psql dev -d indicator
 ```
 
 ## Prerequisites
 
-1. **AWS CLI** configured with appropriate permissions
+### 🔧 System Requirements
+
+1. **AWS CLI** configured with appropriate credentials
 2. **Session Manager Plugin** for AWS CLI:
    ```bash
    # macOS
@@ -61,6 +73,50 @@ npx @fiftyten/db-toolkit psql dev -d indicator
    # Ubuntu/Debian
    sudo apt-get install postgresql-client
    ```
+
+### 🛡️ IAM Permissions (v2.0.0 Required)
+
+**IMPORTANT**: v2.0.0 requires additional IAM permissions for migration functionality.
+
+#### Required Policies
+1. **Existing**: `BastionHostSessionManagerAccess` (for database connections)
+2. **NEW**: `DMSMigrationDeploymentAccess` (for migration features)
+
+#### Migration Permissions Policy
+The complete IAM policy document is available in the release notes. Key permissions include:
+
+- **CloudFormation**: Create/update/delete migration stacks
+- **DMS**: Manage replication instances, endpoints, and tasks  
+- **EC2**: VPC and subnet discovery, security group management
+- **IAM**: Create DMS service roles
+- **CloudWatch/SNS**: Monitoring and notifications
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "CloudFormationMigrationAccess",
+      "Effect": "Allow", 
+      "Action": [
+        "cloudformation:CreateStack",
+        "cloudformation:UpdateStack",
+        "cloudformation:DeleteStack",
+        "cloudformation:DescribeStacks"
+      ],
+      "Resource": [
+        "arn:aws:cloudformation:*:*:stack/indicator-migration-stack-*/*"
+      ]
+    }
+    // ... additional statements (see full policy in documentation)
+  ]
+}
+```
+
+**Policy Name**: `DMSMigrationDeploymentAccess`
+
+#### Without Migration Features
+If you only need database connections (not migration), the existing `BastionHostSessionManagerAccess` policy is sufficient.
 
 ## Usage
 
@@ -142,19 +198,23 @@ fiftyten-db info main                 # Show production environment info
 fiftyten-db list                      # Show all available environments
 ```
 
-### Migration Commands
+### Migration Commands (v2.0.0 - Standalone!)
+
+**🚀 NEW**: All migration commands now work completely standalone - no local repositories required!
 
 #### `migrate deploy` - Deploy Migration Infrastructure
 ```bash
 fiftyten-db migrate deploy <environment>
 
-# Interactive prompts for:
-# • Legacy database endpoint and credentials
-# • Target database selection (auto-discovered from infrastructure)
-# • Notification emails (optional)
+# v2.0.0 Features:
+# • Embedded CloudFormation templates (no CDK required!)
+# • Auto-discovers VPC and subnet configuration
+# • Direct AWS API deployment (no spawn processes)
+# • Interactive prompts for legacy database credentials
+# • Target database auto-discovery from existing infrastructure
 
 # Examples
-fiftyten-db migrate deploy dev        # Deploy migration for dev environment
+fiftyten-db migrate deploy dev        # Deploy migration for dev environment (100% standalone!)
 ```
 
 #### `migrate targets` - List Available Target Databases
@@ -209,28 +269,37 @@ fiftyten-db migrate cleanup dev       # Destroy migration infrastructure
 
 ## Workflows
 
-### Database Migration
+### Database Migration (v2.0.0 - Standalone!)
 
-Complete workflow for migrating from legacy database to new CDK-managed database:
+**🚀 NEW**: Complete workflow for migrating from legacy database to new database - now 100% standalone!
+
+#### v2.0.0 Migration Advantages
+- **No local repositories required**: All infrastructure embedded in CLI
+- **Auto-discovery**: VPC, subnets, and target databases discovered automatically  
+- **Direct API calls**: No CDK spawn processes or PATH issues
+- **Portable**: Works on any developer machine with AWS credentials
 
 ```bash
-# 0. List available target databases (optional)
+# 0. Ensure you have the required IAM permissions
+# Apply DMSMigrationDeploymentAccess policy (one-time setup)
+
+# 1. List available target databases (optional)
 fiftyten-db migrate targets dev
 
-# 1. Deploy migration infrastructure (interactive setup)  
+# 2. Deploy migration infrastructure (100% standalone!)  
 fiftyten-db migrate deploy dev
 # Auto-discovers target databases, prompts for legacy DB details
 
-# 2. Start full migration (full-load + CDC)
+# 3. Start full migration (full-load + CDC)
 fiftyten-db migrate start dev
 
-# 3. Monitor progress (run periodically)
+# 4. Monitor progress (run periodically)
 fiftyten-db migrate status dev
 
-# 4. Validate data integrity
+# 5. Validate data integrity
 fiftyten-db migrate validate dev
 
-# 5. When migration is complete and validated:
+# 6. When migration is complete and validated:
 # Stop the migration task (prepare for cutover)
 fiftyten-db migrate stop dev
 
@@ -241,7 +310,11 @@ fiftyten-db migrate stop dev
 fiftyten-db migrate cleanup dev
 ```
 
-#### Migration Features
+#### Migration Features (v2.0.0 Enhanced)
+- **🚀 Standalone Architecture**: No local repository dependencies required
+- **📦 Embedded Infrastructure**: CloudFormation templates built into CLI
+- **🔍 Auto-Discovery**: VPC, subnets, and target databases discovered automatically
+- **⚡ Direct API Calls**: No CDK spawn processes or PATH issues
 - **Migration Type**: `full-load-and-cdc` (complete migration + ongoing replication)
 - **Auto-Discovery**: Automatically finds target databases from your infrastructure
 - **Security**: Legacy credentials never stored in version control
