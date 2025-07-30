@@ -275,7 +275,7 @@ export class MigrationManager {
       '--require-approval', 'never'
     ];
 
-    const child = spawn('pnpm', args, {
+    const child = spawn('npx', args, {
       stdio: 'inherit',
       env,
       cwd: '../../5010-indicator-storage-infra' // Adjust path as needed
@@ -689,7 +689,7 @@ export class MigrationManager {
         '--force'
       ];
 
-      const child = spawn('pnpm', args, {
+      const child = spawn('npx', args, {
         stdio: 'inherit',
         cwd: '../../5010-indicator-storage-infra' // Adjust path as needed
       });
