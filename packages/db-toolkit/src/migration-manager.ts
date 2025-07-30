@@ -277,7 +277,10 @@ export class MigrationManager {
 
     const child = spawn('npx', args, {
       stdio: 'inherit',
-      env,
+      env: {
+        ...process.env,
+        ...env
+      },
       cwd: '../../5010-indicator-storage-infra' // Adjust path as needed
     });
 
@@ -691,6 +694,7 @@ export class MigrationManager {
 
       const child = spawn('npx', args, {
         stdio: 'inherit',
+        env: process.env,
         cwd: '../../5010-indicator-storage-infra' // Adjust path as needed
       });
 
