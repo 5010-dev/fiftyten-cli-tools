@@ -161,7 +161,7 @@ export function generateMigrationTemplate(params: MigrationTemplateParams): any 
               Ref: 'DMSSecurityGroup'
             }
           ],
-          EngineVersion: '3.5.2',
+          EngineVersion: '3.5.3',
           AutoMinorVersionUpgrade: true,
           Tags: [
             {
