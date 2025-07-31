@@ -160,16 +160,35 @@ export class CloudFormationManager {
       // Generate CloudFormation template
       const template = generateMigrationTemplate(templateParams);
 
-      // Check if stack exists
+      // Check if stack exists and its status
       let stackExists = false;
+      let stackStatus: string | undefined;
       try {
-        await this.callWithMfaRetry(async () => {
+        const response = await this.callWithMfaRetry(async () => {
           const command = new DescribeStacksCommand({ StackName: config.stackName });
           return await this.cfnClient.send(command);
         });
         stackExists = true;
+        stackStatus = response.Stacks?.[0]?.StackStatus;
       } catch (error) {
         // Stack doesn't exist, which is fine
+      }
+
+      // Handle stack states that require deletion before recreation
+      const deletionRequiredStates = [
+        'ROLLBACK_COMPLETE',
+        'ROLLBACK_FAILED', 
+        'CREATE_FAILED',
+        'DELETE_FAILED'
+      ];
+      
+      if (stackExists && stackStatus && deletionRequiredStates.includes(stackStatus)) {
+        console.log(chalk.yellow(`⚠️  Found stack in ${stackStatus} state - deleting it first...`));
+        await this.deleteStack(config.stackName);
+        stackExists = false;
+        stackStatus = undefined;
+        console.log(chalk.blue('🔄 Now creating fresh stack...'));
+        console.log('');
       }
 
       // Deploy or update stack
