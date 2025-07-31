@@ -221,10 +221,7 @@ export function generateMigrationTemplate(params: MigrationTemplateParams): any 
           Port: 5432,
           DatabaseName: targetDatabase || 'indicator_db',
           Username: targetUsername || 'fiftyten',
-          SecretsManagerAccessRoleArn: {
-            'Fn::GetAtt': ['DMSVPCRole', 'Arn']
-          },
-          SecretsManagerSecretId: targetSecretArn,
+          Password: `{{resolve:secretsmanager:${targetSecretArn}:SecretString:password}}`,
           Tags: [
             {
               Key: 'Name',
