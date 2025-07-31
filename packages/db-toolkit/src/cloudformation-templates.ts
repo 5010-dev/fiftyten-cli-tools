@@ -221,12 +221,10 @@ export function generateMigrationTemplate(params: MigrationTemplateParams): any 
           Port: 5432,
           DatabaseName: targetDatabase || 'indicator_db',
           Username: targetUsername || 'fiftyten',
-          PostgreSQLSettings: {
-            SecretsManagerAccessRoleArn: {
-              'Fn::GetAtt': ['DMSVPCRole', 'Arn']
-            },
-            SecretsManagerSecretId: targetSecretArn
+          SecretsManagerAccessRoleArn: {
+            'Fn::GetAtt': ['DMSVPCRole', 'Arn']
           },
+          SecretsManagerSecretId: targetSecretArn,
           Tags: [
             {
               Key: 'Name',
