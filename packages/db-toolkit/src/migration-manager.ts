@@ -1,5 +1,5 @@
 import { CloudFormationClient, DescribeStacksCommand } from '@aws-sdk/client-cloudformation';
-import { DatabaseMigrationServiceClient, DescribeReplicationTasksCommand, StartReplicationTaskCommand, StopReplicationTaskCommand, DescribeTableStatisticsCommand } from '@aws-sdk/client-database-migration-service';
+import { DatabaseMigrationServiceClient, DescribeReplicationTasksCommand, StartReplicationTaskCommand, StopReplicationTaskCommand, DescribeTableStatisticsCommand, TestConnectionCommand, DescribeConnectionsCommand } from '@aws-sdk/client-database-migration-service';
 import chalk from 'chalk';
 import * as readline from 'readline';
 import { MfaAuthenticator } from './mfa-auth';
@@ -27,6 +27,7 @@ export interface MigrationConfig {
 	legacyUsername: string;
 	legacyPassword: string;
 	targetSecretArn: string;
+	migrationType?: 'full-load' | 'full-load-and-cdc';
 	notificationEmails?: string[];
 }
 
@@ -242,7 +243,7 @@ export class MigrationManager {
 		console.log(`   Environment: ${chalk.yellow(config.environment)}`);
 		console.log(`   Source Database: ${chalk.yellow(config.legacyEndpoint + '/' + config.legacyDatabase)}`);
 		console.log(`   Target Secret: ${chalk.yellow(config.targetSecretArn)}`);
-		console.log(`   Migration Type: ${chalk.yellow('full-load-and-cdc')}`);
+		console.log(`   Migration Type: ${chalk.yellow(config.migrationType || 'full-load-and-cdc')}`);
 		console.log('');
 
 		// Confirm deployment
@@ -268,11 +269,142 @@ export class MigrationManager {
 				legacyUsername: config.legacyUsername,
 				legacyPassword: config.legacyPassword,
 				targetSecretArn: config.targetSecretArn,
+				migrationType: config.migrationType,
 				notificationEmails: config.notificationEmails
 			}
 		});
 	}
 
+
+	/**
+	 * Validate that both source and target endpoint connections are successful
+	 */
+	private async validateEndpointConnections(environment: string): Promise<void> {
+		console.log(chalk.blue('🔍 Validating endpoint connections...'));
+
+		const stackName = `indicator-migration-stack-${environment}`;
+		const outputs = await this.cfnManager.getStackOutputs(stackName);
+
+		const sourceEndpointArn = outputs['SourceEndpointArn'];
+		const targetEndpointArn = outputs['TargetEndpointArn'];
+		const replicationInstanceArn = outputs['ReplicationInstanceArn'];
+
+		if (!sourceEndpointArn || !targetEndpointArn || !replicationInstanceArn) {
+			throw new Error('Missing endpoint or replication instance ARNs in stack outputs');
+		}
+
+		console.log(chalk.gray(`   Source ARN: ${sourceEndpointArn}`));
+		console.log(chalk.gray(`   Target ARN: ${targetEndpointArn}`));
+		console.log(chalk.gray(`   Replication Instance ARN: ${replicationInstanceArn}`));
+		console.log('');
+
+		// Test source endpoint connection
+		console.log(chalk.blue('   Testing source endpoint connection...'));
+		await this.testAndWaitForConnection(replicationInstanceArn, sourceEndpointArn, 'source');
+
+		// Test target endpoint connection  
+		console.log(chalk.blue('   Testing target endpoint connection...'));
+		await this.testAndWaitForConnection(replicationInstanceArn, targetEndpointArn, 'target');
+
+		console.log(chalk.green('✅ All endpoint connections validated successfully!'));
+		console.log('');
+	}
+
+	/**
+	 * Test connection and wait for successful result with simplified retry logic
+	 */
+	private async testAndWaitForConnection(replicationInstanceArn: string, endpointArn: string, endpointType: string): Promise<void> {
+		const maxRetries = 2; // Reduce retries to avoid MFA issues
+		let retryCount = 0;
+
+		while (retryCount < maxRetries) {
+			try {
+				if (retryCount > 0) {
+					console.log(chalk.yellow(`      🔄 Retrying ${endpointType} endpoint connection (attempt ${retryCount + 1}/${maxRetries})...`));
+					await new Promise(resolve => setTimeout(resolve, 10000)); // Wait 10 seconds before retry
+				}
+
+				// Start connection test
+				console.log(chalk.blue(`      🧪 Starting ${endpointType} endpoint connection test...`));
+				const testCommand = new TestConnectionCommand({
+					ReplicationInstanceArn: replicationInstanceArn,
+					EndpointArn: endpointArn
+				});
+				await this.dmsClient.send(testCommand);
+
+				// Wait for connection test to complete with reduced polling
+				let attempts = 0;
+				const maxAttempts = 18; // 3 minutes max wait per attempt (18 * 10s)
+
+				while (attempts < maxAttempts) {
+					await new Promise(resolve => setTimeout(resolve, 10000)); // Wait 10 seconds
+
+					try {
+						// Use direct client call to avoid MFA retry loops during polling
+						const describeCommand = new DescribeConnectionsCommand({
+							Filters: [
+								{ Name: 'replication-instance-arn', Values: [replicationInstanceArn] },
+								{ Name: 'endpoint-arn', Values: [endpointArn] }
+							]
+						});
+						const connections = await this.dmsClient.send(describeCommand);
+
+						const connection = connections.Connections?.[0];
+						console.log(chalk.gray(`      📊 Connection status: ${connection?.Status || 'unknown'}`));
+
+						if (connection?.Status === 'successful') {
+							console.log(chalk.green(`      ✅ ${endpointType} endpoint connection successful`));
+							return; // Success! Exit the retry loop
+						} else if (connection?.Status === 'failed') {
+							const error = connection.LastFailureMessage || 'Connection test failed';
+							console.log(chalk.red(`      ❌ ${endpointType} endpoint connection failed:`));
+							console.log(chalk.red(`         ${error}`));
+
+							// If this is the last retry, throw the error
+							if (retryCount === maxRetries - 1) {
+								throw new Error(`${endpointType} endpoint connection failed after ${maxRetries} attempts: ${error}`);
+							}
+
+							// Otherwise, break out of the wait loop to retry
+							break;
+						}
+
+						// Still testing, continue waiting
+						process.stdout.write(`\r      ⏳ Testing ${endpointType} endpoint connection... (${attempts + 1}/${maxAttempts})`);
+
+					} catch (apiError) {
+						// Handle session token errors gracefully - don't fail the entire test
+						if (apiError instanceof Error && apiError.message.includes('Cannot call GetSessionToken with session credentials')) {
+							console.log(chalk.yellow(`      ⚠️  Session token limitation - continuing with existing credentials`));
+							// Continue the loop, don't break or fail
+						} else {
+							console.log(chalk.yellow(`      ⚠️  API error while checking connection status: ${apiError instanceof Error ? apiError.message : String(apiError)}`));
+						}
+						// Continue waiting in both cases
+					}
+
+					attempts++;
+				}
+
+				// If we get here, the test timed out
+				if (retryCount === maxRetries - 1) {
+					throw new Error(`${endpointType} endpoint connection test timed out after ${maxRetries} attempts (3 minutes each)`);
+				}
+
+				console.log(chalk.yellow(`      ⏱️  ${endpointType} endpoint connection test timed out, retrying...`));
+
+			} catch (error) {
+				console.log(chalk.red(`      ❌ Error during ${endpointType} endpoint test: ${error instanceof Error ? error.message : String(error)}`));
+
+				if (retryCount === maxRetries - 1) {
+					// Final attempt failed, re-throw the error
+					throw error;
+				}
+			}
+
+			retryCount++;
+		}
+	}
 
 	/**
 	 * Get migration task ARN from stack outputs
@@ -299,6 +431,9 @@ export class MigrationManager {
 			const taskArn = await this.getMigrationTaskArn(environment);
 			console.log(`   Task ARN: ${chalk.gray(taskArn)}`);
 			console.log('');
+
+			// Validate endpoint connections before starting
+			await this.validateEndpointConnections(environment);
 
 			// Confirm start
 			const confirm = await promptConfirmation('Start full database migration (full-load + CDC)?');
@@ -624,8 +759,63 @@ export class MigrationManager {
 				return;
 			}
 
-			// Delete using CloudFormation API directly
 			const stackName = `indicator-migration-stack-${environment}`;
+
+			// Step 1: Remove security group rules that were added to external security groups
+			try {
+				console.log(chalk.blue('🔧 Step 1: Cleaning up security group rules...'));
+
+				// Get DMS security group ID from stack outputs
+				const stackInfo = await this.callWithMfaRetry(async () => {
+					const command = new DescribeStacksCommand({ StackName: stackName });
+					return await this.cfnClient.send(command);
+				});
+
+				const stack = stackInfo.Stacks?.[0];
+				const dmsSecurityGroupId = stack?.Outputs?.find(output =>
+					output.OutputKey === 'DMSSecurityGroupId'
+				)?.OutputValue;
+
+				if (dmsSecurityGroupId) {
+					// Get endpoints from stack outputs
+					try {
+						const legacyEndpointOutput = stack?.Outputs?.find(output =>
+							output.OutputKey === 'LegacyEndpoint'
+						)?.OutputValue;
+
+						const targetEndpointOutput = stack?.Outputs?.find(output =>
+							output.OutputKey === 'TargetEndpoint'
+						)?.OutputValue;
+
+						if (legacyEndpointOutput && targetEndpointOutput) {
+							const discoveryResult = await this.cfnManager.discoverDatabaseSecurityGroups(
+								legacyEndpointOutput,
+								targetEndpointOutput
+							);
+
+							await this.cfnManager.cleanupSecurityGroupRules(
+								dmsSecurityGroupId,
+								discoveryResult.legacySecurityGroupIds,
+								discoveryResult.targetSecurityGroupIds
+							);
+						} else {
+							console.log(chalk.yellow('⚠️  Could not find endpoint information in stack outputs - skipping rule cleanup'));
+							console.log(chalk.gray(`   Legacy: ${legacyEndpointOutput}, Target: ${targetEndpointOutput}`));
+						}
+					} catch (error) {
+						console.log(chalk.yellow('⚠️  Could not discover database security groups for cleanup'));
+						console.log(chalk.gray(`   ${error instanceof Error ? error.message : String(error)}`));
+					}
+				} else {
+					console.log(chalk.yellow('⚠️  Could not find DMS security group ID - skipping rule cleanup'));
+				}
+			} catch (error) {
+				console.log(chalk.yellow('⚠️  Could not cleanup security group rules - proceeding with stack deletion'));
+				console.log(chalk.gray(`   ${error instanceof Error ? error.message : String(error)}`));
+			}
+
+			// Step 2: Delete CloudFormation stack
+			console.log(chalk.blue('🔧 Step 2: Deleting CloudFormation stack...'));
 			await this.cfnManager.deleteStack(stackName);
 
 		} catch (error) {

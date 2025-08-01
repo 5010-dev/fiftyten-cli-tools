@@ -1,6 +1,6 @@
 {
   "name": "@fiftyten/db-toolkit",
-  "version": "2.0.4",
+  "version": "2.1.0",
   "description": "Complete database toolkit: connections, migration, and operations via AWS Session Manager",
   "main": "index.js",
   "bin": {
@@ -35,6 +35,7 @@
     "@aws-sdk/lib-dynamodb": "^3.0.0",
     "@aws-sdk/client-cloudformation": "^3.0.0",
     "@aws-sdk/client-database-migration-service": "^3.0.0",
+    "@aws-sdk/client-rds": "^3.0.0",
     "inquirer": "^9.0.0"
   },
   "devDependencies": {

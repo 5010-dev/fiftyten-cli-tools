@@ -6,14 +6,19 @@
 [![Node.js Version](https://img.shields.io/badge/node-%3E%3D16.0.0-brightgreen.svg)](https://nodejs.org/)
 [![pnpm](https://img.shields.io/badge/pnpm-%3E%3D8.0.0-blue.svg)](https://pnpm.io/)
 
-A collection of command-line tools for the Fiftyten platform, designed to improve developer experience and operational efficiency.
+A comprehensive command-line toolkit for the Fiftyten platform ecosystem, providing secure database connectivity, AWS DMS migrations, DynamoDB operations, and infrastructure management through integrated AWS services.
 
 ## 🚀 Tools Available
 
 ### [@fiftyten/db-toolkit](./packages/db-toolkit)
-Complete database toolkit: connections, migration, and operations via AWS Session Manager.
+Complete database toolkit with standalone AWS DMS migrations, secure database connectivity via Session Manager, DynamoDB operations, and infrastructure management. Current version: **v2.0.4**
 
-**🚀 NEW v2.0.0**: Completely standalone CLI with embedded infrastructure templates!
+**Core Capabilities:**
+- **Database Connectivity**: Secure connections via AWS Session Manager with automatic MFA and password management
+- **AWS DMS Migrations**: Complete database migration system with embedded CloudFormation templates
+- **DynamoDB Operations**: Table management and data operations with built-in security filtering
+- **Infrastructure Management**: VPC/subnet auto-discovery, security group configuration, and CloudFormation deployment
+- **Security & Compliance**: MFA authentication, credential management, and audit trail support
 
 **Quick Start:**
 ```bash
@@ -21,21 +26,21 @@ Complete database toolkit: connections, migration, and operations via AWS Sessio
 brew install --cask session-manager-plugin
 brew install postgresql awscli
 
-# 2. Install globally (pnpm - team standard)
-pnpm add -g @fiftyten/db-toolkit@2.0.0
+# 2. Install globally 
+pnpm add -g @fiftyten/db-toolkit
 
-# 3. Apply IAM permissions (one-time, see documentation)
-# Attach DMSMigrationDeploymentAccess policy to your user/group
+# 3. Apply IAM permissions (one-time)
+# Attach DMSMigrationDeploymentAccess policy to your AWS user/group
 
-# 4. Database connections (unchanged)
+# 4. Database connections
 fiftyten-db psql dev -d indicator
 
-# 5. DynamoDB operations (unchanged, sensitive fields always hidden)
+# 5. DynamoDB operations (sensitive fields auto-filtered)
 fiftyten-db dynamo list-tables
 fiftyten-db dynamo scan trading_orders --limit 10
 
-# 6. Database migration (now 100% standalone!)
-fiftyten-db migrate deploy dev   # No local repos required!
+# 6. Database migration (standalone - no local repos required)
+fiftyten-db migrate deploy dev
 fiftyten-db migrate start dev
 ```
 
@@ -59,12 +64,12 @@ brew install awscli
 
 #### With pnpm (Team Standard)
 ```bash
-pnpm add -g @fiftyten/db-toolkit@2.0.0
+pnpm add -g @fiftyten/db-toolkit
 ```
 
 #### With npm
 ```bash
-npm install -g @fiftyten/db-toolkit@2.0.0
+npm install -g @fiftyten/db-toolkit
 ```
 
 ### Quick Setup Verification
@@ -225,33 +230,42 @@ fiftyten-db info dev
 fiftyten-db list
 ```
 
-### Database Migration (v2.0.0 - Standalone!)
+### AWS DMS Database Migration
 
-Complete database migration using AWS DMS with full-load + change data capture (CDC).
+Enterprise-grade database migration using AWS Database Migration Service with support for both full-load and change data capture (CDC) migration types.
 
-**🚀 NEW**: Completely standalone - no local repository dependencies required!
+**Standalone Architecture**: No local repository dependencies required - all CloudFormation templates embedded in CLI.
 
-#### Prerequisites for Migration (v2.0.0)
+#### Prerequisites for Migration
 ```bash
 # 1. Ensure you have the required IAM permissions
 # Apply DMSMigrationDeploymentAccess policy (see documentation)
 
-# 2. Install latest CLI version
-pnpm add -g @fiftyten/db-toolkit@2.0.0
+# 2. Install or update CLI
+pnpm add -g @fiftyten/db-toolkit
+```
+
+#### Migration Types
+```bash
+# Full-load migration (recommended for most use cases)
+fiftyten-db migrate deploy dev --type full-load
+
+# Full-load + Change Data Capture for ongoing replication
+fiftyten-db migrate deploy dev --type full-load-and-cdc
 ```
 
 #### Migration Workflow
 ```bash
-# 1. Deploy migration infrastructure (now 100% standalone!)
+# 1. Deploy migration infrastructure (standalone - no local repos required)
 fiftyten-db migrate deploy dev
 
-# 2. Start full migration (full-load + CDC)
+# 2. Start migration
 fiftyten-db migrate start dev
 
-# 3. Monitor progress
+# 3. Monitor progress with real-time statistics
 fiftyten-db migrate status dev
 
-# 4. Validate migration data
+# 4. Validate migration data integrity
 fiftyten-db migrate validate dev
 
 # 5. Stop migration when ready for cutover
@@ -261,15 +275,15 @@ fiftyten-db migrate stop dev
 fiftyten-db migrate cleanup dev
 ```
 
-#### Migration Features
-- **🚀 Standalone Architecture**: No local storage infrastructure repository required
-- **📦 Embedded Templates**: CloudFormation templates built into CLI
-- **🔍 Auto-Discovery**: Automatically discovers VPC and subnet configuration
-- **Full Load**: Migrates all existing data from legacy database
-- **Change Data Capture (CDC)**: Real-time replication of ongoing changes
+#### Key Features
+- **Embedded CloudFormation Templates**: No external repository dependencies
+- **Auto-Discovery**: Automatically detects VPC, subnets, and security groups
+- **Migration Type Selection**: Full-load or full-load-and-cdc based on requirements
 - **Progress Monitoring**: Table-by-table statistics and error tracking
-- **Data Validation**: Comprehensive validation with recommendations
-- **Security**: Legacy credentials never stored, uses Secrets Manager for target
+- **Data Validation**: Comprehensive row count and data integrity checks
+- **Security Integration**: Uses AWS Secrets Manager for credentials, never stores passwords
+- **Infrastructure as Code**: Complete DMS setup via CloudFormation
+- **CloudWatch Integration**: Automated monitoring and alerting
 
 ### DynamoDB Operations
 
@@ -282,21 +296,26 @@ fiftyten-db dynamo list-tables
 fiftyten-db dynamo describe fiftyten-exchange-credentials-dev
 ```
 
-#### Data Operations (Sensitive Fields Always Hidden)
+#### Data Operations (Built-in Security Filtering)
 ```bash
-# Scan recent trading orders
+# Scan recent trading orders (sensitive fields automatically filtered)
 fiftyten-db dynamo scan trading_orders --limit 10
 
-# Query all credentials for tenant 5010
+# Query credentials for tenant (API keys/secrets never displayed)
 fiftyten-db dynamo query fiftyten-exchange-credentials-dev "tenant_id = 5010"
 
-# Get specific item (composite key)
+# Get specific item with composite key
 fiftyten-db dynamo get-item fiftyten-exchange-credentials-dev \
   '{"tenant_id":"5010","credential_sk":"USER#john_doe_123#PRODUCT#COPY_TRADING#EXCHANGE#gateio"}'
 
-# Get trading order details
+# Get trading order with automatic field filtering
 fiftyten-db dynamo get-item trading_orders "id:trd_5f8a2b3c4d5e6f7g8h9i"
 ```
+
+#### Security Features
+- **Automatic Field Filtering**: Sensitive fields (API keys, secrets, credentials) are automatically hidden
+- **Safe Data Operations**: Built-in protection against accidental credential exposure
+- **Audit Trail**: All DynamoDB operations are logged for security compliance
 
 ### Team Workflow
 ```bash
@@ -313,24 +332,23 @@ fiftyten-db tunnel dev -d indicator
 psql -h localhost -p 5433 -d indicator_db -U fiftyten
 ```
 
-### MFA Authentication
+### MFA Authentication & Security
 
-The CLI tool automatically handles MFA authentication when required:
+The toolkit provides enterprise-grade security with intelligent MFA handling:
 
-#### Auto-Discovery (New in v1.2.0!)
+#### Automatic MFA Device Discovery
 ```bash
-# When MFA is required, the tool auto-discovers your MFA device:
+# Single device auto-selection (seamless experience)
 🔐 MFA authentication required
 ✅ Auto-detected MFA device: arn:aws:iam::ACCOUNT:mfa/ED_GalaxyS24_Ultra
 ? Enter MFA token code: 123456
-
 ✅ MFA authentication successful!
 Session expires: 12/31/2023, 2:00:00 PM
 ```
 
-#### Multiple Devices
+#### Multiple Device Support
 ```bash
-# If you have multiple MFA devices:
+# Interactive device selection for multiple MFA devices
 🔐 MFA authentication required
 Multiple MFA devices found. Please select one:
 
@@ -339,29 +357,47 @@ Multiple MFA devices found. Please select one:
   backup-device (arn:aws:iam::ACCOUNT:mfa/backup-device)
 ```
 
-#### Manual Entry (Fallback)
-```bash
-# If auto-discovery fails:
-🔐 MFA authentication required
-Could not auto-discover MFA devices, using fallback detection
-? MFA Device Serial Number: arn:aws:iam::ACCOUNT:mfa/device-name
-? Enter MFA token code: 123456
-```
+#### Security Features
+- **Session Token Management**: Secure temporary credential handling
+- **Automatic Expiration**: Sessions automatically expire for security
+- **Retry Prevention**: Smart retry logic prevents MFA loops
+- **Credential Chain Support**: Full AWS credential provider chain compatibility
 
-**Key Features:**
-- 🚀 **One-Command Connection**: `fiftyten-db psql dev -d indicator` - tunnel + password + psql automatically
-- 🔍 **Multi-Database Support**: Connect to indicator, copytrading, or any configured database
-- 📦 **Database Migration**: Full migration with AWS DMS (full-load + CDC)
-- 🗂️ **DynamoDB Operations**: List, scan, query, and get items with built-in security
-- 🔒 **Security-First Design**: Sensitive fields (API keys, secrets) always hidden
-- 🔍 **Database Discovery**: `fiftyten-db databases dev` to see what's available
-- 🔐 **Smart MFA Handling**: Auto-discovers MFA devices with single prompt
-- 🎯 **Single Device Auto-Selection** for seamless experience  
-- 📋 **Multiple Device Selection** with friendly device names when needed
-- 🔒 **Secure Session Token** handling (no role assumption needed)
-- ⏰ **Session Management** with automatic expiration
-- 🔄 **Automatic Password Retrieval** from AWS Secrets Manager
-- 🛡️ **Enterprise Security**: Session Manager + MFA + Secrets Manager integration
+## 🎯 Key Features
+
+### Database Connectivity
+- **One-Command Connection**: `fiftyten-db psql dev -d indicator` - complete tunnel + credentials + psql launch
+- **Multi-Database Support**: indicator, copytrading, platform, or any configured database
+- **Database Discovery**: `fiftyten-db databases dev` to see available databases
+- **Automatic Password Retrieval**: Seamless integration with AWS Secrets Manager
+- **Session Manager Integration**: Secure connections without SSH keys or bastion access
+
+### Migration System
+- **AWS DMS Integration**: Enterprise-grade database migration service
+- **Migration Type Selection**: Full-load or full-load-and-cdc based on requirements
+- **Embedded Infrastructure**: CloudFormation templates built into CLI (no external dependencies)
+- **Auto-Discovery**: Automatic VPC, subnet, and security group detection
+- **Progress Monitoring**: Real-time table-by-table migration statistics
+- **Data Validation**: Comprehensive row count and integrity validation
+
+### DynamoDB Operations
+- **Table Management**: List, describe, and manage DynamoDB tables
+- **Safe Data Operations**: Scan, query, and get items with built-in security filtering
+- **Automatic Security Filtering**: Sensitive fields (API keys, secrets) never displayed
+- **Audit Trail**: All operations logged for security compliance
+
+### Security & Compliance
+- **Intelligent MFA Handling**: Auto-discovery with single device selection
+- **Session Token Management**: Secure temporary credential handling with automatic expiration
+- **Credential Chain Support**: Full AWS credential provider compatibility
+- **Security Group Management**: Automated bidirectional rule configuration
+- **Secrets Manager Integration**: Never store or display sensitive credentials
+
+### Infrastructure Management
+- **CloudFormation Deployment**: Complete infrastructure as code
+- **VPC Auto-Discovery**: Automatic network configuration detection
+- **Security Group Automation**: Intelligent rule management for database access
+- **CloudWatch Integration**: Automated monitoring and alerting setup
 
 ## 🤝 Contributing
 
@@ -381,9 +417,7 @@ Could not auto-discover MFA devices, using fallback detection
 
 | Tool | Description | Status | Version |
 |------|-------------|--------|---------|
-| [db-toolkit](./packages/db-toolkit) | Complete database toolkit: connections, migration, operations | ✅ Active | 2.0.0 |
-| monitoring-cli | Infrastructure monitoring tools | 🚧 Planned | - |
-| deployment-helper | Deployment utilities | 🚧 Planned | - |
+| [db-toolkit](./packages/db-toolkit) | Complete database toolkit with AWS DMS migrations, secure connectivity, and DynamoDB operations | ✅ Active | 2.0.4 |
 
 ## 🆘 Support
 

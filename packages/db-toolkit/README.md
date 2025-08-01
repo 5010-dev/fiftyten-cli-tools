@@ -6,28 +6,46 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![AWS](https://img.shields.io/badge/AWS-232F3E?logo=amazon-aws&logoColor=white)](https://aws.amazon.com/)
 
-Complete database toolkit: connections, migration, and operations via AWS Session Manager.
+Complete database toolkit providing secure database connectivity, AWS DMS migrations, DynamoDB operations, and infrastructure management through integrated AWS services.
 
-## 🚀 NEW v2.0.0: Standalone Architecture
+## Architecture
 
-**BREAKING CHANGE**: Major architectural improvement - completely standalone CLI!
+**Standalone Design**: Complete functionality with embedded CloudFormation templates and AWS service integrations.
 
-### What's New
-- **🚀 Standalone Migration**: No local repository dependencies required
-- **📦 Embedded Infrastructure**: CloudFormation templates built into CLI
-- **🔍 Auto-Discovery**: VPC and subnet configuration discovered automatically
-- **⚡ Direct API Calls**: Eliminates CDK spawn processes and PATH issues
+### Core Components
+- **Database Connectivity**: AWS Session Manager-based secure connections
+- **Migration System**: AWS DMS with embedded infrastructure templates
+- **DynamoDB Operations**: Table management with built-in security filtering
+- **Infrastructure Management**: VPC/subnet auto-discovery and security group automation
+- **Security Integration**: MFA authentication, credential management, and audit trail
 
 ## Features
 
-✅ **One-Command Connection** - `fiftyten-db psql dev -d indicator` - tunnel + password + psql automatically  
-✅ **Multi-Database Support** - Connect to indicator, copytrading, or any configured database  
-✅ **🚀 Standalone Migration** - Full migration with AWS DMS (full-load + CDC) - no local repos required!  
-✅ **Automatic Password Retrieval** - No manual password lookup required  
-✅ **Intelligent Port Conflict Detection** - Auto-suggests available ports  
-✅ **Smart MFA Handling** - Auto-discovers MFA devices with single prompt  
-✅ **No SSH Keys Required** - Uses AWS Session Manager for secure connections  
-✅ **Database Discovery** - `fiftyten-db databases dev` to see what's available
+### Database Connectivity
+✅ **One-Command Connection** - `fiftyten-db psql dev -d indicator` - complete tunnel + credentials + psql launch  
+✅ **Multi-Database Support** - indicator, copytrading, platform, or any configured database  
+✅ **Automatic Password Retrieval** - Seamless AWS Secrets Manager integration  
+✅ **Session Manager Security** - No SSH keys required, enterprise-grade security  
+✅ **Database Discovery** - `fiftyten-db databases dev` to see available databases
+
+### Migration System
+✅ **AWS DMS Integration** - Enterprise-grade database migration service  
+✅ **Embedded Infrastructure** - CloudFormation templates built into CLI  
+✅ **Migration Type Selection** - Full-load or full-load-and-cdc based on requirements  
+✅ **Auto-Discovery** - Automatic VPC, subnet, and security group detection  
+✅ **Progress Monitoring** - Real-time table-by-table migration statistics
+
+### DynamoDB Operations
+✅ **Table Management** - List, describe, and manage DynamoDB tables  
+✅ **Safe Data Operations** - Scan, query, get items with built-in security filtering  
+✅ **Automatic Security Filtering** - Sensitive fields never displayed  
+✅ **Audit Trail** - All operations logged for security compliance
+
+### Security & Infrastructure
+✅ **Intelligent MFA Handling** - Auto-discovery with single device selection  
+✅ **Port Conflict Detection** - Auto-suggests available ports  
+✅ **Security Group Automation** - Bidirectional rule configuration  
+✅ **CloudFormation Deployment** - Complete infrastructure as code
 
 ## Installation
 
@@ -35,25 +53,25 @@ Complete database toolkit: connections, migration, and operations via AWS Sessio
 
 ```bash
 # With pnpm (team standard)
-pnpm add -g @fiftyten/db-toolkit@2.0.0
+pnpm add -g @fiftyten/db-toolkit
 
 # With npm
-npm install -g @fiftyten/db-toolkit@2.0.0
+npm install -g @fiftyten/db-toolkit
 ```
 
 ### One-time Usage
 
 ```bash
 # With pnpm
-pnpm dlx @fiftyten/db-toolkit@2.0.0 psql dev -d indicator
+pnpm dlx @fiftyten/db-toolkit psql dev -d indicator
 
 # With npm
-npx @fiftyten/db-toolkit@2.0.0 psql dev -d indicator
+npx @fiftyten/db-toolkit psql dev -d indicator
 ```
 
 ## Prerequisites
 
-### 🔧 System Requirements
+### System Requirements
 
 1. **AWS CLI** configured with appropriate credentials
 2. **Session Manager Plugin** for AWS CLI:
@@ -74,22 +92,21 @@ npx @fiftyten/db-toolkit@2.0.0 psql dev -d indicator
    sudo apt-get install postgresql-client
    ```
 
-### 🛡️ IAM Permissions (v2.0.0 Required)
-
-**IMPORTANT**: v2.0.0 requires additional IAM permissions for migration functionality.
+### IAM Permissions
 
 #### Required Policies
-1. **Existing**: `BastionHostSessionManagerAccess` (for database connections)
-2. **NEW**: `DMSMigrationDeploymentAccess` (for migration features)
+1. **Database Connectivity**: `BastionHostSessionManagerAccess` (for Session Manager connections)
+2. **Migration Features**: `DMSMigrationDeploymentAccess` (for DMS operations and CloudFormation deployment)
+3. **DynamoDB Operations**: Included in migration policy or separate DynamoDB read access
 
-#### Migration Permissions Policy
-The complete IAM policy document is available in the release notes. Key permissions include:
-
+#### Key Permissions Included
 - **CloudFormation**: Create/update/delete migration stacks
 - **DMS**: Manage replication instances, endpoints, and tasks  
 - **EC2**: VPC and subnet discovery, security group management
 - **IAM**: Create DMS service roles
 - **CloudWatch/SNS**: Monitoring and notifications
+- **DynamoDB**: Table operations and data access
+- **Secrets Manager**: Database credential access
 
 ```json
 {
@@ -115,8 +132,8 @@ The complete IAM policy document is available in the release notes. Key permissi
 
 **Policy Name**: `DMSMigrationDeploymentAccess`
 
-#### Without Migration Features
-If you only need database connections (not migration), the existing `BastionHostSessionManagerAccess` policy is sufficient.
+#### Minimal Permissions
+For database connections only (without migration or DynamoDB features), the `BastionHostSessionManagerAccess` policy is sufficient.
 
 ## Usage
 
@@ -125,6 +142,14 @@ If you only need database connections (not migration), the existing `BastionHost
 ```bash
 # One command for complete database access (recommended)
 fiftyten-db psql dev -d indicator
+
+# DynamoDB operations (sensitive fields auto-filtered)
+fiftyten-db dynamo list-tables
+fiftyten-db dynamo scan trading_orders --limit 10
+
+# Database migration (standalone - no local repos required)
+fiftyten-db migrate deploy dev
+fiftyten-db migrate start dev
 
 # Alternative: Manual tunnel approach
 fiftyten-db tunnel dev -d indicator
@@ -198,23 +223,84 @@ fiftyten-db info main                 # Show production environment info
 fiftyten-db list                      # Show all available environments
 ```
 
-### Migration Commands (v2.0.0 - Standalone!)
+### DynamoDB Commands
 
-**🚀 NEW**: All migration commands now work completely standalone - no local repositories required!
+#### `dynamo list-tables` - List DynamoDB Tables
+```bash
+fiftyten-db dynamo list-tables
+
+# Examples
+fiftyten-db dynamo list-tables        # List all tables in the region
+```
+
+#### `dynamo describe` - Describe Table Structure
+```bash
+fiftyten-db dynamo describe <table-name>
+
+# Examples
+fiftyten-db dynamo describe fiftyten-exchange-credentials-dev
+fiftyten-db dynamo describe trading_orders
+```
+
+#### `dynamo scan` - Scan Table Data (Security Filtered)
+```bash
+fiftyten-db dynamo scan <table-name> [options]
+
+# Options:
+# --limit <number>    Limit number of items returned
+# --start-key <json>  Start scan from specific key
+
+# Examples
+fiftyten-db dynamo scan trading_orders --limit 10
+fiftyten-db dynamo scan user_profiles --limit 5
+```
+
+#### `dynamo query` - Query Table Data
+```bash
+fiftyten-db dynamo query <table-name> "<condition>"
+
+# Examples
+fiftyten-db dynamo query fiftyten-exchange-credentials-dev "tenant_id = 5010"
+fiftyten-db dynamo query trading_orders "user_id = 12345"
+```
+
+#### `dynamo get-item` - Get Specific Item
+```bash
+fiftyten-db dynamo get-item <table-name> "<key>"
+
+# For simple keys:
+fiftyten-db dynamo get-item trading_orders "id:trd_5f8a2b3c4d5e6f7g8h9i"
+
+# For composite keys (JSON format):
+fiftyten-db dynamo get-item fiftyten-exchange-credentials-dev \
+  '{"tenant_id":"5010","credential_sk":"USER#john_doe_123#PRODUCT#COPY_TRADING#EXCHANGE#gateio"}'
+```
+
+**DynamoDB Security Features:**
+- **Automatic Field Filtering**: Sensitive fields (API keys, secrets, credentials) are automatically hidden
+- **Safe Operations**: Built-in protection against accidental credential exposure
+- **Audit Trail**: All operations are logged for security compliance
+
+### Migration Commands
+
+Complete AWS DMS migration system with embedded infrastructure:
 
 #### `migrate deploy` - Deploy Migration Infrastructure
 ```bash
-fiftyten-db migrate deploy <environment>
+fiftyten-db migrate deploy <environment> [options]
 
-# v2.0.0 Features:
-# • Embedded CloudFormation templates (no CDK required!)
+# Options:
+# --type <migration-type>   Migration type: full-load or full-load-and-cdc (default: full-load)
+
+# Features:
+# • Embedded CloudFormation templates (no external dependencies)
 # • Auto-discovers VPC and subnet configuration
-# • Direct AWS API deployment (no spawn processes)
 # • Interactive prompts for legacy database credentials
 # • Target database auto-discovery from existing infrastructure
 
 # Examples
-fiftyten-db migrate deploy dev        # Deploy migration for dev environment (100% standalone!)
+fiftyten-db migrate deploy dev                    # Deploy with full-load migration
+fiftyten-db migrate deploy dev --type full-load-and-cdc  # Deploy with CDC
 ```
 
 #### `migrate targets` - List Available Target Databases
@@ -232,7 +318,7 @@ fiftyten-db migrate targets dev       # List target databases in dev environment
 fiftyten-db migrate start <environment>
 
 # Examples
-fiftyten-db migrate start dev         # Start full migration (full-load + CDC)
+fiftyten-db migrate start dev         # Start migration (type determined by deployment)
 ```
 
 #### `migrate status` - Monitor Migration Progress
@@ -269,58 +355,56 @@ fiftyten-db migrate cleanup dev       # Destroy migration infrastructure
 
 ## Workflows
 
-### Database Migration (v2.0.0 - Standalone!)
+### Database Migration Workflow
 
-**🚀 NEW**: Complete workflow for migrating from legacy database to new database - now 100% standalone!
+Complete AWS DMS migration workflow with embedded infrastructure:
 
-#### v2.0.0 Migration Advantages
-- **No local repositories required**: All infrastructure embedded in CLI
+#### Migration Advantages
+- **Standalone Operation**: All infrastructure templates embedded in CLI
 - **Auto-discovery**: VPC, subnets, and target databases discovered automatically  
-- **Direct API calls**: No CDK spawn processes or PATH issues
+- **Migration Type Selection**: Choose between full-load or full-load-and-cdc
 - **Portable**: Works on any developer machine with AWS credentials
 
 ```bash
-# 0. Ensure you have the required IAM permissions
+# 1. Ensure you have the required IAM permissions
 # Apply DMSMigrationDeploymentAccess policy (one-time setup)
 
-# 1. List available target databases (optional)
+# 2. Optional: List available target databases
 fiftyten-db migrate targets dev
 
-# 2. Deploy migration infrastructure (100% standalone!)  
-fiftyten-db migrate deploy dev
+# 3. Deploy migration infrastructure (standalone - no local repos required)
+fiftyten-db migrate deploy dev --type full-load
 # Auto-discovers target databases, prompts for legacy DB details
 
-# 3. Start full migration (full-load + CDC)
+# 4. Start migration
 fiftyten-db migrate start dev
 
-# 4. Monitor progress (run periodically)
+# 5. Monitor progress (run periodically)
 fiftyten-db migrate status dev
 
-# 5. Validate data integrity
+# 6. Validate data integrity
 fiftyten-db migrate validate dev
 
-# 6. When migration is complete and validated:
+# 7. When migration is complete and validated:
 # Stop the migration task (prepare for cutover)
 fiftyten-db migrate stop dev
 
-# 6. Update application to use new database
+# 8. Update application to use new database
 # (Point your app to the new database endpoint)
 
-# 7. Cleanup migration resources
+# 9. Cleanup migration resources
 fiftyten-db migrate cleanup dev
 ```
 
-#### Migration Features (v2.0.0 Enhanced)
-- **🚀 Standalone Architecture**: No local repository dependencies required
-- **📦 Embedded Infrastructure**: CloudFormation templates built into CLI
-- **🔍 Auto-Discovery**: VPC, subnets, and target databases discovered automatically
-- **⚡ Direct API Calls**: No CDK spawn processes or PATH issues
-- **Migration Type**: `full-load-and-cdc` (complete migration + ongoing replication)
-- **Auto-Discovery**: Automatically finds target databases from your infrastructure
-- **Security**: Legacy credentials never stored in version control
-- **Monitoring**: Real-time progress with table-by-table statistics
-- **Validation**: Comprehensive data validation with recommendations
-- **AWS Integration**: Uses DMS, CloudWatch, and SNS for professional-grade migration
+#### Migration Features
+- **Embedded CloudFormation Templates**: No external repository dependencies
+- **Auto-Discovery**: VPC, subnets, and target databases discovered automatically
+- **Migration Type Selection**: Full-load or full-load-and-cdc based on requirements
+- **Security Integration**: Legacy credentials never stored, uses AWS Secrets Manager
+- **Progress Monitoring**: Real-time table-by-table statistics and error tracking
+- **Data Validation**: Comprehensive row count and integrity validation
+- **CloudWatch Integration**: Automated monitoring and alerting
+- **Infrastructure as Code**: Complete DMS setup via CloudFormation
 
 ### Database Administration
 
