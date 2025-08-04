@@ -5,6 +5,7 @@ import chalk from 'chalk';
 import { DatabaseConnector } from './database-connector';
 import { DynamoDBConnector } from './dynamodb-connector';
 import { MigrationManager, MigrationConfig } from './migration-manager';
+import { PgMigrationManager, PgMigrationConfig } from './pg-migration-manager';
 import { version } from '../package.json';
 
 const program = new Command();
@@ -534,6 +535,155 @@ Example:
 			await manager.cleanupMigration(environment);
 		} catch (error) {
 			console.error(chalk.red('Error cleaning up migration:'), error instanceof Error ? error.message : String(error));
+			process.exit(1);
+		}
+	});
+
+// PostgreSQL dump/restore migration
+migrateCommand
+	.command('pg-dump')
+	.description('Simple PostgreSQL dump/restore migration (recommended for PostgreSQL-to-PostgreSQL)')
+	.argument('<environment>', 'Environment (dev/main)')
+	.option('--source-db <sourceDb>', 'Source database name', 'indicator')
+	.option('--target-db <targetDb>', 'Target database name', 'indicator')
+	.option('--source-endpoint <endpoint>', 'External source database endpoint (if not using tunnel)')
+	.option('--source-username <username>', 'External source database username')
+	.option('--source-password <password>', 'External source database password')
+	.option('--data-only', 'Dump data only (no schema)')
+	.option('--skip-tables <tables>', 'Comma-separated list of tables to skip')
+	.option('--include-tables <tables>', 'Comma-separated list of tables to include (only these)')
+	.option('--region <region>', 'AWS region', 'us-west-1')
+	.addHelpText('after', `
+PostgreSQL dump/restore migration is much simpler and more reliable than DMS:
+
+${chalk.green('Advantages:')}
+  ✅ PostgreSQL-native tools (pg_dump/psql)
+  ✅ No complex infrastructure setup
+  ✅ Better error handling and debugging
+  ✅ Works perfectly for PostgreSQL-to-PostgreSQL migrations
+  ✅ Supports table filtering and data-only dumps
+
+${chalk.yellow('Migration Process:')}
+  1. Creates tunnels to both source and target databases
+  2. Uses pg_dump to extract data from source
+  3. Uses psql to load data into target
+  4. Automatically cleans up tunnels
+
+${chalk.cyan('Examples:')}
+  # Basic migration from external database
+  ${chalk.cyan('fiftyten-db migrate pg-dump dev \\\\')}
+  ${chalk.cyan('  --source-endpoint develop.cxw4cwcyepf1.us-west-1.rds.amazonaws.com \\\\')}
+  ${chalk.cyan('  --source-username ogongilgong \\\\')}
+  ${chalk.cyan('  --source-password "F5olld4QvJ2Yx8aJMA9R"')}
+
+  # Data-only migration (preserves existing schema)
+  ${chalk.cyan('fiftyten-db migrate pg-dump dev --data-only \\\\')}
+  ${chalk.cyan('  --source-endpoint develop.cxw4cwcyepf1.us-west-1.rds.amazonaws.com \\\\')}
+  ${chalk.cyan('  --source-username ogongilgong \\\\')}
+  ${chalk.cyan('  --source-password "F5olld4QvJ2Yx8aJMA9R"')}
+
+  # Skip problematic tables
+  ${chalk.cyan('fiftyten-db migrate pg-dump dev --data-only \\\\')}
+  ${chalk.cyan('  --skip-tables "migrations,typeorm_metadata" \\\\')}
+  ${chalk.cyan('  --source-endpoint develop.cxw4cwcyepf1.us-west-1.rds.amazonaws.com \\\\')}
+  ${chalk.cyan('  --source-username ogongilgong \\\\')}
+  ${chalk.cyan('  --source-password "F5olld4QvJ2Yx8aJMA9R"')}`)
+	.action(async (environment, options) => {
+		try {
+			const config: PgMigrationConfig = {
+				environment,
+				sourceDatabase: options.sourceDb,
+				targetDatabase: options.targetDb,
+				sourceEndpoint: options.sourceEndpoint,
+				sourceUsername: options.sourceUsername,
+				sourcePassword: options.sourcePassword,
+				dataOnly: options.dataOnly,
+				skipTables: options.skipTables ? options.skipTables.split(',').map((t: string) => t.trim()) : undefined,
+				includeTables: options.includeTables ? options.includeTables.split(',').map((t: string) => t.trim()) : undefined
+			};
+
+			const manager = new PgMigrationManager(options.region);
+			await manager.performPgMigration(config);
+		} catch (error) {
+			console.error(chalk.red('Error performing PostgreSQL migration:'), error instanceof Error ? error.message : String(error));
+			process.exit(1);
+		}
+	});
+
+// Test PostgreSQL connections
+migrateCommand
+	.command('pg-test')
+	.description('Test PostgreSQL database connections before migration')
+	.argument('<environment>', 'Environment (dev/main)')
+	.option('--source-db <sourceDb>', 'Source database name', 'indicator')
+	.option('--target-db <targetDb>', 'Target database name', 'indicator')
+	.option('--source-endpoint <endpoint>', 'External source database endpoint (if not using tunnel)')
+	.option('--source-username <username>', 'External source database username')
+	.option('--source-password <password>', 'External source database password')
+	.option('--region <region>', 'AWS region', 'us-west-1')
+	.addHelpText('after', `
+Tests connections to both source and target databases before performing migration.
+This helps identify connection issues early.
+
+${chalk.cyan('Example:')}
+  ${chalk.cyan('fiftyten-db migrate pg-test dev \\\\')}
+  ${chalk.cyan('  --source-endpoint develop.cxw4cwcyepf1.us-west-1.rds.amazonaws.com \\\\')}
+  ${chalk.cyan('  --source-username ogongilgong \\\\')}
+  ${chalk.cyan('  --source-password "F5olld4QvJ2Yx8aJMA9R"')}`)
+	.action(async (environment, options) => {
+		try {
+			const config: PgMigrationConfig = {
+				environment,
+				sourceDatabase: options.sourceDb,
+				targetDatabase: options.targetDb,
+				sourceEndpoint: options.sourceEndpoint,
+				sourceUsername: options.sourceUsername,
+				sourcePassword: options.sourcePassword
+			};
+
+			const manager = new PgMigrationManager(options.region);
+			await manager.testConnections(config);
+		} catch (error) {
+			console.error(chalk.red('Error testing connections:'), error instanceof Error ? error.message : String(error));
+			process.exit(1);
+		}
+	});
+
+// Get PostgreSQL migration statistics
+migrateCommand
+	.command('pg-stats')
+	.description('Compare row counts between source and target databases')
+	.argument('<environment>', 'Environment (dev/main)')
+	.option('--source-db <sourceDb>', 'Source database name', 'indicator')
+	.option('--target-db <targetDb>', 'Target database name', 'indicator')
+	.option('--source-endpoint <endpoint>', 'External source database endpoint (if not using tunnel)')
+	.option('--source-username <username>', 'External source database username')
+	.option('--source-password <password>', 'External source database password')
+	.option('--region <region>', 'AWS region', 'us-west-1')
+	.addHelpText('after', `
+Compares row counts between source and target databases to validate migration success.
+Shows table-by-table comparison with differences highlighted.
+
+${chalk.cyan('Example:')}
+  ${chalk.cyan('fiftyten-db migrate pg-stats dev \\\\')}
+  ${chalk.cyan('  --source-endpoint develop.cxw4cwcyepf1.us-west-1.rds.amazonaws.com \\\\')}
+  ${chalk.cyan('  --source-username ogongilgong \\\\')}
+  ${chalk.cyan('  --source-password "F5olld4QvJ2Yx8aJMA9R"')}`)
+	.action(async (environment, options) => {
+		try {
+			const config: PgMigrationConfig = {
+				environment,
+				sourceDatabase: options.sourceDb,
+				targetDatabase: options.targetDb,
+				sourceEndpoint: options.sourceEndpoint,
+				sourceUsername: options.sourceUsername,
+				sourcePassword: options.sourcePassword
+			};
+
+			const manager = new PgMigrationManager(options.region);
+			await manager.getMigrationStats(config);
+		} catch (error) {
+			console.error(chalk.red('Error getting migration statistics:'), error instanceof Error ? error.message : String(error));
 			process.exit(1);
 		}
 	});
