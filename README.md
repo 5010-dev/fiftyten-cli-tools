@@ -11,7 +11,7 @@ A comprehensive command-line toolkit for the Fiftyten platform ecosystem, provid
 ## 🚀 Tools Available
 
 ### [@fiftyten/db-toolkit](./packages/db-toolkit)
-Complete database toolkit with standalone AWS DMS migrations, secure database connectivity via Session Manager, DynamoDB operations, and infrastructure management. Current version: **v2.0.4**
+Complete database toolkit with standalone AWS DMS migrations, secure database connectivity via Session Manager, DynamoDB operations, and infrastructure management. Current version: **v2.3.0**
 
 **Core Capabilities:**
 - **Database Connectivity**: Secure connections via AWS Session Manager with automatic MFA and password management
@@ -39,9 +39,15 @@ fiftyten-db psql dev -d indicator
 fiftyten-db dynamo list-tables
 fiftyten-db dynamo scan trading_orders --limit 10
 
-# 6. Database migration (standalone - no local repos required)
-fiftyten-db migrate deploy dev
-fiftyten-db migrate start dev
+# 6. Database migration options
+# PostgreSQL migration (recommended for PostgreSQL-to-PostgreSQL)
+fiftyten-db migrate pg-test dev              # Test connections
+fiftyten-db migrate pg-dump dev --source-db legacy --data-only  # Migrate data
+fiftyten-db migrate pg-stats dev --source-db legacy             # Verify migration
+
+# AWS DMS migration (for complex scenarios or cross-database)
+fiftyten-db migrate deploy dev               # Deploy DMS infrastructure
+fiftyten-db migrate start dev                # Start migration
 ```
 
 ## 📦 Installation
@@ -230,60 +236,78 @@ fiftyten-db info dev
 fiftyten-db list
 ```
 
-### AWS DMS Database Migration
+### PostgreSQL Database Migration (Recommended)
 
-Enterprise-grade database migration using AWS Database Migration Service with support for both full-load and change data capture (CDC) migration types.
+Simple and reliable PostgreSQL-to-PostgreSQL migration using native pg_dump/psql tools with automatic tunneling and credential management.
 
-**Standalone Architecture**: No local repository dependencies required - all CloudFormation templates embedded in CLI.
+**Native PostgreSQL Tools**: Uses pg_dump and psql for maximum compatibility and reliability.
 
-#### Prerequisites for Migration
+#### Quick Migration Examples
 ```bash
-# 1. Ensure you have the required IAM permissions
-# Apply DMSMigrationDeploymentAccess policy (see documentation)
+# Test connections before migration
+fiftyten-db migrate pg-test dev
 
-# 2. Install or update CLI
-pnpm add -g @fiftyten/db-toolkit
+# Basic migration (data-only, preserves existing schema)
+fiftyten-db migrate pg-dump dev --source-db legacy --data-only
+
+# Full migration with schema (overwrites target schema)
+fiftyten-db migrate pg-dump dev --source-db legacy
+
+# Verify migration success with table-by-table comparison
+fiftyten-db migrate pg-stats dev --source-db legacy
 ```
 
-#### Migration Types
+#### Migration from External Database
 ```bash
-# Full-load migration (recommended for most use cases)
-fiftyten-db migrate deploy dev --type full-load
+# Migrate from external PostgreSQL database
+fiftyten-db migrate pg-dump dev \
+  --source-endpoint external-db.example.com \
+  --source-username postgres \
+  --source-password "password123" \
+  --data-only
 
-# Full-load + Change Data Capture for ongoing replication
+# Advanced: Skip problematic tables
+fiftyten-db migrate pg-dump dev \
+  --source-endpoint external-db.example.com \
+  --source-username postgres \
+  --source-password "password123" \
+  --skip-tables "migrations,typeorm_metadata" \
+  --data-only
+```
+
+#### Key Advantages Over DMS
+✅ **PostgreSQL-Native**: Uses pg_dump/psql for perfect PostgreSQL compatibility  
+✅ **No Infrastructure Setup**: Ready to use immediately  
+✅ **Better Error Handling**: Clear PostgreSQL error messages  
+✅ **Table Filtering**: Include/exclude specific tables during migration  
+✅ **Data-Only Mode**: Preserve existing schema, migrate data only  
+✅ **Sequential Tunneling**: Eliminates Session Manager resource conflicts  
+✅ **Automatic Verification**: Built-in table-by-table comparison  
+
+### AWS DMS Migration (Enterprise/Cross-Database)
+
+Complete AWS Database Migration Service with embedded CloudFormation templates for complex migration scenarios.
+
+**Best for**: Cross-database migrations, large-scale enterprise migrations, ongoing CDC replication.
+
+```bash
+# Deploy migration infrastructure
 fiftyten-db migrate deploy dev --type full-load-and-cdc
-```
 
-#### Migration Workflow
-```bash
-# 1. Deploy migration infrastructure (standalone - no local repos required)
-fiftyten-db migrate deploy dev
-
-# 2. Start migration
+# Start migration
 fiftyten-db migrate start dev
 
-# 3. Monitor progress with real-time statistics
+# Monitor progress
 fiftyten-db migrate status dev
 
-# 4. Validate migration data integrity
+# Validate and cleanup
 fiftyten-db migrate validate dev
-
-# 5. Stop migration when ready for cutover
-fiftyten-db migrate stop dev
-
-# 6. Cleanup resources after successful migration
 fiftyten-db migrate cleanup dev
 ```
 
-#### Key Features
-- **Embedded CloudFormation Templates**: No external repository dependencies
-- **Auto-Discovery**: Automatically detects VPC, subnets, and security groups
-- **Migration Type Selection**: Full-load or full-load-and-cdc based on requirements
-- **Progress Monitoring**: Table-by-table statistics and error tracking
-- **Data Validation**: Comprehensive row count and data integrity checks
-- **Security Integration**: Uses AWS Secrets Manager for credentials, never stores passwords
-- **Infrastructure as Code**: Complete DMS setup via CloudFormation
-- **CloudWatch Integration**: Automated monitoring and alerting
+**When to Use DMS vs pg-dump:**
+- **Use pg-dump**: PostgreSQL → PostgreSQL (simpler, faster, more reliable)
+- **Use DMS**: Cross-database migrations, large enterprise migrations, ongoing CDC replication
 
 ### DynamoDB Operations
 
@@ -417,7 +441,7 @@ Multiple MFA devices found. Please select one:
 
 | Tool | Description | Status | Version |
 |------|-------------|--------|---------|
-| [db-toolkit](./packages/db-toolkit) | Complete database toolkit with AWS DMS migrations, secure connectivity, and DynamoDB operations | ✅ Active | 2.0.4 |
+| [db-toolkit](./packages/db-toolkit) | Complete database toolkit with AWS DMS migrations, secure connectivity, and DynamoDB operations | ✅ Active | 2.3.0 |
 
 ## 🆘 Support
 

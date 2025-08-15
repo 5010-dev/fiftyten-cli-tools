@@ -296,9 +296,53 @@ export class PgMigrationManager {
 			localPort
 		);
 
-		// Wait for tunnel to be ready
+		// Wait for tunnel to be ready and verify it's actually working
 		console.log(chalk.gray(`   Waiting for tunnel on port ${localPort}...`));
-		await new Promise(resolve => setTimeout(resolve, 3000));
+		
+		// Wait up to 30 seconds for the tunnel to establish
+		const maxRetries = 30;
+		let retries = 0;
+		let tunnelReady = false;
+		
+		while (retries < maxRetries && !tunnelReady) {
+			await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
+			
+			try {
+				// Check if port is actually listening
+				const net = await import('net');
+				const testSocket = new net.Socket();
+				
+				await new Promise<void>((resolve, reject) => {
+					testSocket.setTimeout(1000);
+					testSocket.on('connect', () => {
+						testSocket.destroy();
+						tunnelReady = true;
+						resolve();
+					});
+					testSocket.on('timeout', () => {
+						testSocket.destroy();
+						reject(new Error('timeout'));
+					});
+					testSocket.on('error', () => {
+						testSocket.destroy();
+						reject(new Error('connection failed'));
+					});
+					testSocket.connect(localPort, 'localhost');
+				});
+				
+			} catch (error) {
+				// Port not ready yet, continue waiting
+				retries++;
+			}
+		}
+
+		if (!tunnelReady) {
+			// Kill the tunnel process since it failed
+			if (tunnelProcess && !tunnelProcess.killed) {
+				tunnelProcess.kill('SIGTERM');
+			}
+			throw new Error(`Tunnel failed to establish after ${maxRetries} seconds. Check SSM Agent connectivity on bastion host.`);
+		}
 
 		const tunnelInfo: TunnelInfo = {
 			...database,
@@ -358,90 +402,87 @@ export class PgMigrationManager {
 	}
 
 	/**
-	 * Get bastion instance ID for environment
+	 * Get bastion instance ID for the given environment using CDK-first discovery
 	 * 
-	 * TEMPORARY IMPLEMENTATION FOR MIGRATION:
-	 * This method currently hardcodes legacy bastion instance IDs because the legacy infrastructure
-	 * (ogongilong-dev-bastion) doesn't follow standard naming conventions and will be decommissioned
-	 * after the database migration is complete.
-	 * 
-	 * CURRENT LIMITATIONS:
-	 * - Hardcoded instance IDs for legacy bastions (not discoverable via standard tags)
-	 * - Different access methods: legacy uses SSH keys, CDK uses Session Manager
-	 * - Mixed infrastructure patterns during transition period
-	 * 
-	 * TODO FOR UNIVERSAL SOLUTION:
-	 * After migration is complete and legacy infrastructure is removed, this method should be 
-	 * refactored to use a universal discovery approach:
-	 * 1. Try multiple naming patterns: [indicator-bastion-{env}-host, bastion-{env}, {env}-bastion]
-	 * 2. Search by standardized tags (Environment, Purpose, etc.)
-	 * 3. Support configurable bastion discovery via SSM parameters
-	 * 4. Implement fallback chain: SSM config -> tag-based search -> naming patterns
-	 * 5. Support both Session Manager and SSH-based access methods
+	 * Discovery Strategy:
+	 * 1. Primary: CDK bastion pattern (indicator-bastion-{env}-host)
+	 * 2. Fallback: Multiple naming patterns for compatibility
+	 * 3. All bastions use Session Manager for secure access
 	 */
 	private async getBastionInstanceId(environment: string): Promise<string> {
-		// TEMPORARY: Hardcoded legacy bastion instance IDs for migration only
-		// These instances use SSH key access (ogongilgong-prod.pem) instead of Session Manager
-		// Will be removed after migration to new CDK-managed infrastructure
-		const legacyBastionMap: Record<string, string> = {
-			'dev': 'i-0dd2cfaadc010e441',   // ogongilong-dev-bastion
-			'main': 'i-02ac506d559e94ecc'   // ogongilgong-prod-bastion (legacy naming uses 'prod' not 'main')
-		};
+		console.log(chalk.gray(`   Searching for CDK bastion: indicator-bastion-${environment}-host`));
+		
+		// Primary: Try CDK bastion pattern
+		try {
+			const response = await this.callWithMfaRetry(async () => {
+				return await this.ec2Client.send(new DescribeInstancesCommand({
+					Filters: [
+						{
+							Name: 'tag:Name',
+							Values: [`indicator-bastion-${environment}-host`]
+						},
+						{
+							Name: 'instance-state-name',
+							Values: ['running']
+						}
+					]
+				}));
+			});
 
-		// Try legacy bastion first if available (temporary for migration)
-		if (legacyBastionMap[environment]) {
+			const instances = response.Reservations?.flatMap(r => r.Instances || []) || [];
+			if (instances.length > 0) {
+				const instance = instances[0];
+				if (instance.InstanceId) {
+					const bastionName = instance.Tags?.find(t => t.Key === 'Name')?.Value || 'unknown';
+					console.log(chalk.green(`✅ Found CDK bastion: ${instance.InstanceId} (${bastionName})`));
+					return instance.InstanceId;
+				}
+			}
+		} catch (error) {
+			console.log(chalk.yellow(`   CDK bastion discovery failed, trying fallback patterns...`));
+		}
+
+		// Fallback: Try alternative naming patterns for compatibility
+		const fallbackPatterns = [
+			`bastion-${environment}`,
+			`${environment}-bastion`,
+			`indicator-${environment}-bastion`
+		];
+
+		for (const pattern of fallbackPatterns) {
 			try {
-				console.log(chalk.gray(`   Checking legacy bastion: ${legacyBastionMap[environment]}`));
+				console.log(chalk.gray(`   Trying pattern: ${pattern}`));
 				
-				// Verify the legacy bastion is still running
 				const response = await this.callWithMfaRetry(async () => {
 					return await this.ec2Client.send(new DescribeInstancesCommand({
-						InstanceIds: [legacyBastionMap[environment]]
+						Filters: [
+							{
+								Name: 'tag:Name',
+								Values: [pattern]
+							},
+							{
+								Name: 'instance-state-name',
+								Values: ['running']
+							}
+						]
 					}));
 				});
 
-				const instance = response.Reservations?.[0]?.Instances?.[0];
-				if (instance && instance.State?.Name === 'running' && instance.InstanceId) {
-					const bastionName = instance.Tags?.find(t => t.Key === 'Name')?.Value || 'unknown';
-					console.log(chalk.green(`✅ Found legacy bastion: ${instance.InstanceId} (${bastionName})`));
-					console.log(chalk.yellow(`   Note: This is a temporary hardcoded bastion for migration only`));
-					return instance.InstanceId;
+				const instances = response.Reservations?.flatMap(r => r.Instances || []) || [];
+				if (instances.length > 0) {
+					const instance = instances[0];
+					if (instance.InstanceId) {
+						const bastionName = instance.Tags?.find(t => t.Key === 'Name')?.Value || 'unknown';
+						console.log(chalk.green(`✅ Found bastion: ${instance.InstanceId} (${bastionName})`));
+						return instance.InstanceId;
+					}
 				}
 			} catch (error) {
-				console.log(chalk.yellow(`   Legacy bastion ${legacyBastionMap[environment]} not accessible, trying CDK pattern...`));
+				console.log(chalk.gray(`   Pattern ${pattern} not found, continuing...`));
 			}
 		}
 
-		// Fallback to CDK bastion discovery (for target databases and post-migration)
-		console.log(chalk.gray(`   Searching for CDK bastion: indicator-bastion-${environment}-host`));
-		
-		const response = await this.callWithMfaRetry(async () => {
-			return await this.ec2Client.send(new DescribeInstancesCommand({
-				Filters: [
-					{
-						Name: 'tag:Name',
-						Values: [`indicator-bastion-${environment}-host`]
-					},
-					{
-						Name: 'instance-state-name',
-						Values: ['running']
-					}
-				]
-			}));
-		});
-
-		const instances = response.Reservations?.flatMap(r => r.Instances || []) || [];
-		if (instances.length === 0) {
-			throw new Error(`No running bastion instance found for environment: ${environment}. Tried legacy bastion (${legacyBastionMap[environment] || 'none'}) and CDK pattern (indicator-bastion-${environment}-host).`);
-		}
-
-		const instance = instances[0];
-		if (!instance.InstanceId) {
-			throw new Error(`Bastion instance ID not found for environment: ${environment}`);
-		}
-
-		console.log(chalk.green(`✅ Found CDK bastion: ${instance.InstanceId}`));
-		return instance.InstanceId;
+		throw new Error(`No running bastion instance found for environment: ${environment}. Tried CDK pattern (indicator-bastion-${environment}-host) and fallback patterns: ${fallbackPatterns.join(', ')}.`);
 	}
 
 	/**
@@ -489,6 +530,7 @@ export class PgMigrationManager {
 		// Handle tunnel output
 		tunnelProcess.stdout?.on('data', (data) => {
 			const message = data.toString();
+			console.log(chalk.blue(`   Tunnel stdout: ${message.trim()}`));
 			if (message.includes('Port forwarding session started')) {
 				console.log(chalk.green('   ✅ Port forwarding session started'));
 			}
@@ -496,9 +538,7 @@ export class PgMigrationManager {
 
 		tunnelProcess.stderr?.on('data', (data) => {
 			const message = data.toString();
-			if (!message.includes('Starting session') && !message.includes('Session') && message.trim()) {
-				console.error(chalk.yellow(`   Tunnel warning: ${message.trim()}`));
-			}
+			console.log(chalk.yellow(`   Tunnel stderr: ${message.trim()}`));
 		});
 
 		return tunnelProcess;

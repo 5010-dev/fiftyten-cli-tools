@@ -29,11 +29,11 @@ Complete database toolkit providing secure database connectivity, AWS DMS migrat
 ✅ **Database Discovery** - `fiftyten-db databases dev` to see available databases
 
 ### Migration System
-✅ **AWS DMS Integration** - Enterprise-grade database migration service  
-✅ **Embedded Infrastructure** - CloudFormation templates built into CLI  
-✅ **Migration Type Selection** - Full-load or full-load-and-cdc based on requirements  
-✅ **Auto-Discovery** - Automatic VPC, subnet, and security group detection  
-✅ **Progress Monitoring** - Real-time table-by-table migration statistics
+✅ **PostgreSQL Native Migration** - pg_dump/psql tools with automatic tunneling (recommended)  
+✅ **AWS DMS Integration** - Enterprise-grade database migration service for complex scenarios  
+✅ **Migration Verification** - Table-by-table row count comparison and validation  
+✅ **Auto-Discovery** - CDK-first bastion discovery with fallback patterns  
+✅ **Sequential Tunneling** - Eliminates Session Manager resource conflicts
 
 ### DynamoDB Operations
 ✅ **Table Management** - List, describe, and manage DynamoDB tables  
@@ -147,7 +147,12 @@ fiftyten-db psql dev -d indicator
 fiftyten-db dynamo list-tables
 fiftyten-db dynamo scan trading_orders --limit 10
 
-# Database migration (standalone - no local repos required)
+# PostgreSQL migration (recommended)
+fiftyten-db migrate pg-test dev --source-db legacy        # Test connections
+fiftyten-db migrate pg-dump dev --source-db legacy --data-only  # Migrate data
+fiftyten-db migrate pg-stats dev --source-db legacy       # Verify migration
+
+# AWS DMS migration (for complex scenarios)
 fiftyten-db migrate deploy dev
 fiftyten-db migrate start dev
 
@@ -353,9 +358,140 @@ fiftyten-db migrate cleanup <environment>
 fiftyten-db migrate cleanup dev       # Destroy migration infrastructure
 ```
 
+#### PostgreSQL Migration Commands (Recommended)
+
+Native PostgreSQL migration using pg_dump/psql with automatic tunneling:
+
+#### `migrate pg-test` - Test Database Connections
+```bash
+fiftyten-db migrate pg-test <environment> [options]
+
+# Test with built-in legacy database configuration
+fiftyten-db migrate pg-test dev
+fiftyten-db migrate pg-test main
+
+# Test with external source database
+fiftyten-db migrate pg-test dev \
+  --source-endpoint external-db.example.com \
+  --source-username postgres \
+  --source-password "password123"
+```
+
+#### `migrate pg-dump` - PostgreSQL Migration
+```bash
+fiftyten-db migrate pg-dump <environment> [options]
+
+# Basic data-only migration (recommended)
+fiftyten-db migrate pg-dump dev --source-db legacy --data-only
+fiftyten-db migrate pg-dump main --source-db legacy --data-only
+
+# Full migration with schema
+fiftyten-db migrate pg-dump dev --source-db legacy
+
+# External database migration
+fiftyten-db migrate pg-dump dev \
+  --source-endpoint external-db.example.com \
+  --source-username postgres \
+  --source-password "password123" \
+  --data-only
+
+# Advanced: Table filtering
+fiftyten-db migrate pg-dump dev --source-db legacy \
+  --data-only \
+  --skip-tables "migrations,typeorm_metadata"
+
+fiftyten-db migrate pg-dump dev --source-db legacy \
+  --data-only \
+  --include-tables "users,products,orders"
+```
+
+**Options:**
+- `--source-db <database>` - Use built-in legacy database configuration
+- `--target-db <database>` - Target database name (default: indicator)
+- `--source-endpoint <endpoint>` - External source database endpoint
+- `--source-username <username>` - External source database username
+- `--source-password <password>` - External source database password
+- `--data-only` - Dump data only, preserve existing schema
+- `--skip-tables <tables>` - Comma-separated list of tables to skip
+- `--include-tables <tables>` - Include only these tables (comma-separated)
+
+#### `migrate pg-stats` - Migration Verification
+```bash
+fiftyten-db migrate pg-stats <environment> [options]
+
+# Compare with built-in legacy database
+fiftyten-db migrate pg-stats dev --source-db legacy
+fiftyten-db migrate pg-stats main --source-db legacy
+
+# Compare with external database
+fiftyten-db migrate pg-stats dev \
+  --source-endpoint external-db.example.com \
+  --source-username postgres \
+  --source-password "password123"
+```
+
+**PostgreSQL Migration Features:**
+- **Native Tools**: Uses pg_dump and psql for maximum PostgreSQL compatibility
+- **Sequential Tunneling**: Creates source tunnel → dump → close → target tunnel → restore → close
+- **Automatic Verification**: Table-by-table row count comparison
+- **CDK-First Discovery**: Modern bastion discovery with fallback patterns
+- **Security Integration**: Automatic password retrieval from AWS Secrets Manager
+- **Error Handling**: Clear PostgreSQL error messages with context
+- **Table Filtering**: Advanced include/exclude table options
+- **Schema Flexibility**: Data-only mode preserves existing target schema
+
 ## Workflows
 
-### Database Migration Workflow
+### PostgreSQL Migration Workflow (Recommended)
+
+Simple and reliable PostgreSQL-to-PostgreSQL migration workflow:
+
+```bash
+# 1. Test connections to both source and target databases
+fiftyten-db migrate pg-test dev --source-db legacy
+
+# 2. Perform data-only migration (preserves existing schema)
+fiftyten-db migrate pg-dump dev --source-db legacy --data-only
+
+# 3. Verify migration success with table-by-table comparison
+fiftyten-db migrate pg-stats dev --source-db legacy
+
+# 4. (Optional) Advanced migration with table filtering
+fiftyten-db migrate pg-dump dev --source-db legacy \
+  --data-only \
+  --skip-tables "migrations,typeorm_metadata"
+```
+
+#### Key Advantages
+- **No Infrastructure Setup**: Works immediately without CloudFormation deployment
+- **PostgreSQL Native**: Perfect compatibility using pg_dump/psql
+- **Automatic Tunneling**: Handles Session Manager tunnels automatically
+- **Built-in Verification**: Table-by-table row count validation
+- **Error Recovery**: Clear error messages and automatic cleanup
+
+#### Migration from External Database
+```bash
+# Test external database connection
+fiftyten-db migrate pg-test dev \
+  --source-endpoint external-db.example.com \
+  --source-username postgres \
+  --source-password "password123"
+
+# Migrate data from external database
+fiftyten-db migrate pg-dump dev \
+  --source-endpoint external-db.example.com \
+  --source-username postgres \
+  --source-password "password123" \
+  --data-only
+
+# Verify migration
+fiftyten-db migrate pg-stats dev \
+  --source-endpoint external-db.example.com \
+  --source-username postgres \
+  --source-password "password123"
+```
+
+### AWS DMS Migration Workflow
 
 Complete AWS DMS migration workflow with embedded infrastructure:
 

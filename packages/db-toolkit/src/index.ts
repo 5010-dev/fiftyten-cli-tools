@@ -350,24 +350,20 @@ Examples:
 				short: 'Manual Entry'
 			});
 
-			// Use hardcoded legacy database configuration for now
-			console.log(chalk.yellow('Using legacy database configuration:'));
-			console.log('  Endpoint: develop.cxw4cwcyepf1.us-west-1.rds.amazonaws.com');
-			console.log('  Database: indicator');
-			console.log('  Username: ogongilgong');
-
-			const config: MigrationConfig = {
-				environment,
-				legacyEndpoint: 'develop.cxw4cwcyepf1.us-west-1.rds.amazonaws.com',
-				legacyDatabase: 'indicator',
-				legacyUsername: 'ogongilgong',
-				legacyPassword: 'F5olld4QvJ2Yx8aJMA9R',
-				targetSecretArn: targetChoices.length > 0 ? targetChoices[0].value : '',
-				migrationType: options.type,
-				notificationEmails: undefined,
-			};
-
-			await manager.deployMigration(config);
+			// DMS migration requires manual configuration for specific use cases
+			console.log(chalk.yellow('💡 Consider using pg-dump for PostgreSQL-to-PostgreSQL migrations'));
+			console.log(chalk.gray('   pg-dump is simpler and more reliable for PostgreSQL migrations'));
+			console.log(chalk.gray('   Use DMS for cross-database migrations or enterprise scenarios'));
+			console.log('');
+			
+			console.log(chalk.blue('📋 DMS Migration Setup'));
+			console.log(chalk.gray('For DMS migration, you need to manually configure:'));
+			console.log(chalk.gray('• Legacy database endpoint and credentials'));
+			console.log(chalk.gray('• Target database secret ARN'));
+			console.log(chalk.gray('• Migration type (full-load or full-load-and-cdc)'));
+			console.log('');
+			
+			throw new Error('DMS migration requires manual configuration. Please update the CLI with your specific database details or use "fiftyten-db migrate pg-dump" for PostgreSQL migrations.');
 		} catch (error) {
 			console.error(chalk.red('Error deploying migration:'), error instanceof Error ? error.message : String(error));
 			process.exit(1);
