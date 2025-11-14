@@ -146,7 +146,10 @@ export class DatabaseConnector {
 		});
 
 		if (!response.Reservations || response.Reservations.length === 0) {
-			throw new Error(`No bastion host found for environment: ${environment}`);
+			throw new Error(
+				`No bastion host found for environment: ${environment}\n` +
+				`   Expected EC2 instance tag: indicator-bastion-${environment}-host`
+			);
 		}
 
 		const instance = response.Reservations[0].Instances?.[0];
@@ -182,18 +185,25 @@ export class DatabaseConnector {
 			? `/indicator/indicator-api/${environment}/database-environment-variables`
 			: `/indicator/${database}-api/${environment}/database-environment-variables`;
 
-		const response = await this.callWithMfaRetry(async () => {
-			const command = new GetParameterCommand({
-				Name: parameterName
+		try {
+			const response = await this.callWithMfaRetry(async () => {
+				const command = new GetParameterCommand({
+					Name: parameterName
+				});
+				return await this.ssmClient.send(command);
 			});
-			return await this.ssmClient.send(command);
-		});
 
-		if (!response.Parameter || !response.Parameter.Value) {
-			throw new Error(`Database info not found for ${database} in environment: ${environment}`);
+			if (!response.Parameter || !response.Parameter.Value) {
+				throw new Error(`Database info not found for ${database} in environment: ${environment}`);
+			}
+
+			return JSON.parse(response.Parameter.Value);
+		} catch (error: any) {
+			// Re-throw with AWS SDK error details
+			const errorName = error.name || 'UnknownError';
+			const errorMessage = error.message || String(error);
+			throw new Error(`${errorName}: ${errorMessage}\n   Parameter: ${parameterName}`);
 		}
-
-		return JSON.parse(response.Parameter.Value);
 	}
 
 	/**
@@ -202,20 +212,27 @@ export class DatabaseConnector {
 	async getDatabasePassword(environment: string, database: string = 'indicator'): Promise<string> {
 		const dbInfo = await this.getDatabaseInfo(environment, database);
 
-		const command = new GetSecretValueCommand({
-			SecretId: dbInfo.DATABASE_SECRET_ARN
-		});
+		try {
+			const command = new GetSecretValueCommand({
+				SecretId: dbInfo.DATABASE_SECRET_ARN
+			});
 
-		const response = await this.callWithMfaRetry(async () => {
-			return await this.secretsClient.send(command);
-		});
+			const response = await this.callWithMfaRetry(async () => {
+				return await this.secretsClient.send(command);
+			});
 
-		if (!response.SecretString) {
-			throw new Error(`Database password not found in secret: ${dbInfo.DATABASE_SECRET_ARN}`);
+			if (!response.SecretString) {
+				throw new Error(`Database password not found in secret: ${dbInfo.DATABASE_SECRET_ARN}`);
+			}
+
+			const secretValue = JSON.parse(response.SecretString);
+			return secretValue.password || secretValue.PASSWORD;
+		} catch (error: any) {
+			// Re-throw with AWS SDK error details
+			const errorName = error.name || 'UnknownError';
+			const errorMessage = error.message || String(error);
+			throw new Error(`${errorName}: ${errorMessage}\n   Secret ARN: ${dbInfo.DATABASE_SECRET_ARN}`);
 		}
-
-		const secretValue = JSON.parse(response.SecretString);
-		return secretValue.password || secretValue.PASSWORD;
 	}
 
 	/**
@@ -649,7 +666,13 @@ export class DatabaseConnector {
 			});
 
 		} catch (error) {
-			console.error(chalk.red('Error setting up database connection:'), error instanceof Error ? error.message : String(error));
+			console.error(chalk.red('Error setting up database connection:'));
+			if (error instanceof Error) {
+				console.error(chalk.red('Message:'), error.message);
+				console.error(chalk.red('Stack:'), error.stack);
+			} else {
+				console.error(chalk.red('Error:'), error);
+			}
 			throw error;
 		}
 	}

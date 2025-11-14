@@ -110,7 +110,13 @@ program
 			const connector = new DatabaseConnector(options.region);
 			await connector.connectWithPassword(environment, options.database, parseInt(options.port));
 		} catch (error) {
-			console.error(chalk.red('Error connecting to database:'), error instanceof Error ? error.message : String(error));
+			console.error(chalk.red('Error connecting to database:'));
+			if (error instanceof Error) {
+				console.error(chalk.red('Message:'), error.message);
+				console.error(chalk.red('Stack:'), error.stack);
+			} else {
+				console.error(chalk.red('Error:'), error);
+			}
 			process.exit(1);
 		}
 	});
