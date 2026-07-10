@@ -13,7 +13,7 @@ This is a TypeScript monorepo containing CLI tools for the Fiftyten platform eco
 - **AWS Integration**: Heavy use of AWS SDK v3 (EC2, SSM, Secrets Manager, IAM)
 
 ### Current Packages
-- **db-toolkit**: Complete database toolkit with connections, migration, MFA support, and DynamoDB operations
+- **db-toolkit**: Complete database toolkit with connections, Valkey cache access, MFA support, and DynamoDB operations
 
 ## Development Commands
 
@@ -51,11 +51,11 @@ pnpm --filter db-toolkit install <package>
 
 ### Testing CLI Tools
 ```bash
-# Test db-connect locally after building
+# Test db-toolkit locally after building
 node packages/db-toolkit/bin/fiftyten-db.js --help
 
 # Test with pnpm dlx (without global install)
-pnpm dlx @fiftyten/db-toolkit psql dev -d indicator
+pnpm dlx @fiftyten/db-toolkit psql main -d indicator
 ```
 
 ### Publishing
@@ -81,7 +81,7 @@ Each tool follows this structure:
 - **Commander.js**: CLI framework for argument parsing and command structure
 - **AWS SDK v3**: Modular AWS service clients (EC2, SSM, Secrets Manager, IAM)
 - **Chalk**: Terminal output coloring
-- **Inquirer**: Interactive prompts for MFA and user input
+- **Node readline**: Interactive prompts for MFA and confirmations
 
 ### AWS Integration Patterns
 - **Credential Chain**: Supports AWS profiles, IAM roles, environment variables
@@ -91,7 +91,7 @@ Each tool follows this structure:
 - **Parameter Store**: Configuration storage for environment-specific settings
 
 ### Database Connection Flow
-1. **Environment Resolution**: Maps environment (dev/main) to AWS infrastructure
+1. **Environment Resolution**: Maps environment (main) to AWS infrastructure
 2. **MFA Authentication**: Auto-discovers MFA devices, prompts for token
 3. **Instance Discovery**: Finds bastion hosts via EC2 tags
 4. **Parameter Retrieval**: Gets database configuration from SSM Parameter Store
@@ -101,8 +101,9 @@ Each tool follows this structure:
 
 ### CLI Command Patterns
 - Use Commander.js with consistent argument/option patterns
-- Environment argument: `<environment>` (dev/main)
-- Database option: `-d, --database <app>` (platform, copytrading)
+- Environment argument: `<environment>` (main)
+- Database option: `-d, --database <app>` (indicator, quant)
+- Cache command: `valkey <env> [command...]` (alias `redis`) with `--bot`/`-n <index>` targeting and a `--write` guard (Valkey via valkey-cli)
 - Port option: `-p, --port <port>` with intelligent defaults
 - Region option: `--region <region>` defaulting to us-west-1
 

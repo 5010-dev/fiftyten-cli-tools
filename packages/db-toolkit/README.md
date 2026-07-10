@@ -6,7 +6,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![AWS](https://img.shields.io/badge/AWS-232F3E?logo=amazon-aws&logoColor=white)](https://aws.amazon.com/)
 
-Complete database toolkit providing secure database connectivity, AWS DMS migrations, DynamoDB operations, and infrastructure management through integrated AWS services.
+Complete database toolkit providing secure database connectivity, Valkey cache access, DynamoDB operations, and infrastructure management through integrated AWS services.
 
 ## Architecture
 
@@ -14,7 +14,7 @@ Complete database toolkit providing secure database connectivity, AWS DMS migrat
 
 ### Core Components
 - **Database Connectivity**: AWS Session Manager-based secure connections
-- **Migration System**: AWS DMS with embedded infrastructure templates
+- **Valkey Cache Access**: Guarded read/write to the shared ElastiCache (Valkey) via the bastion tunnel
 - **DynamoDB Operations**: Table management with built-in security filtering
 - **Infrastructure Management**: VPC/subnet auto-discovery and security group automation
 - **Security Integration**: MFA authentication, credential management, and audit trail
@@ -22,18 +22,12 @@ Complete database toolkit providing secure database connectivity, AWS DMS migrat
 ## Features
 
 ### Database Connectivity
-✅ **One-Command Connection** - `fiftyten-db psql dev -d indicator` - complete tunnel + credentials + psql launch  
-✅ **Multi-Database Support** - indicator, copytrading, platform, or any configured database  
+✅ **One-Command Connection** - `fiftyten-db psql main -d indicator` - complete tunnel + credentials + psql launch  
+✅ **Multi-Database Support** - indicator, quant, or any configured database  
 ✅ **Automatic Password Retrieval** - Seamless AWS Secrets Manager integration  
 ✅ **Session Manager Security** - No SSH keys required, enterprise-grade security  
-✅ **Database Discovery** - `fiftyten-db databases dev` to see available databases
-
-### Migration System
-✅ **PostgreSQL Native Migration** - pg_dump/psql tools with automatic tunneling (recommended)  
-✅ **AWS DMS Integration** - Enterprise-grade database migration service for complex scenarios  
-✅ **Migration Verification** - Table-by-table row count comparison and validation  
-✅ **Auto-Discovery** - CDK-first bastion discovery with fallback patterns  
-✅ **Sequential Tunneling** - Eliminates Session Manager resource conflicts
+✅ **Database Discovery** - `fiftyten-db databases main` to see available databases  
+✅ **Valkey Cache Access** - `fiftyten-db valkey main --bot <name>` - guarded read/write to the shared ElastiCache
 
 ### DynamoDB Operations
 ✅ **Table Management** - List, describe, and manage DynamoDB tables  
@@ -63,10 +57,10 @@ npm install -g @fiftyten/db-toolkit
 
 ```bash
 # With pnpm
-pnpm dlx @fiftyten/db-toolkit psql dev -d indicator
+pnpm dlx @fiftyten/db-toolkit psql main -d indicator
 
 # With npm
-npx @fiftyten/db-toolkit psql dev -d indicator
+npx @fiftyten/db-toolkit psql main -d indicator
 ```
 
 ## Prerequisites
@@ -91,49 +85,22 @@ npx @fiftyten/db-toolkit psql dev -d indicator
    # Ubuntu/Debian
    sudo apt-get install postgresql-client
    ```
+4. **Valkey CLI** (for the `valkey` cache command; `redis-cli` also works):
+   ```bash
+   # macOS
+   brew install valkey
+   ```
 
 ### IAM Permissions
 
-#### Required Policies
-1. **Database Connectivity**: `BastionHostSessionManagerAccess` (for Session Manager connections)
-2. **Migration Features**: `DMSMigrationDeploymentAccess` (for DMS operations and CloudFormation deployment)
-3. **DynamoDB Operations**: Included in migration policy or separate DynamoDB read access
+Database connectivity, the `valkey` cache command, and DynamoDB operations are all covered by the **`BastionHostSessionManagerAccess`** policy (hand-attached to your AWS user or group). It grants:
 
-#### Key Permissions Included
-- **CloudFormation**: Create/update/delete migration stacks
-- **DMS**: Manage replication instances, endpoints, and tasks  
-- **EC2**: VPC and subnet discovery, security group management
-- **IAM**: Create DMS service roles
-- **CloudWatch/SNS**: Monitoring and notifications
-- **DynamoDB**: Table operations and data access
-- **Secrets Manager**: Database credential access
+- **SSM**: `StartSession` on the bastion, plus read of `/indicator/bastion/*/connection-info`, `/indicator/*/{env}/database-environment-variables`, and `/indicator/quant/*/bots/*/valkey-db-index`
+- **CloudFormation**: `ListExports` (Valkey endpoint discovery)
+- **EC2**: `DescribeInstances` (bastion discovery)
+- **Secrets Manager**: `GetSecretValue` for the shared database secret
 
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Sid": "CloudFormationMigrationAccess",
-      "Effect": "Allow", 
-      "Action": [
-        "cloudformation:CreateStack",
-        "cloudformation:UpdateStack",
-        "cloudformation:DeleteStack",
-        "cloudformation:DescribeStacks"
-      ],
-      "Resource": [
-        "arn:aws:cloudformation:*:*:stack/indicator-migration-stack-*/*"
-      ]
-    }
-    // ... additional statements (see full policy in documentation)
-  ]
-}
-```
-
-**Policy Name**: `DMSMigrationDeploymentAccess`
-
-#### Minimal Permissions
-For database connections only (without migration or DynamoDB features), the `BastionHostSessionManagerAccess` policy is sufficient.
+DynamoDB operations additionally need read access to the relevant tables.
 
 ## Usage
 
@@ -141,23 +108,17 @@ For database connections only (without migration or DynamoDB features), the `Bas
 
 ```bash
 # One command for complete database access (recommended)
-fiftyten-db psql dev -d indicator
+fiftyten-db psql main -d indicator
 
 # DynamoDB operations (sensitive fields auto-filtered)
 fiftyten-db dynamo list-tables
 fiftyten-db dynamo scan trading_orders --limit 10
 
-# PostgreSQL migration (recommended)
-fiftyten-db migrate pg-test dev --source-db legacy        # Test connections
-fiftyten-db migrate pg-dump dev --source-db legacy --data-only  # Migrate data
-fiftyten-db migrate pg-stats dev --source-db legacy       # Verify migration
-
-# AWS DMS migration (for complex scenarios)
-fiftyten-db migrate deploy dev
-fiftyten-db migrate start dev
+# Valkey cache (read + guarded write)
+fiftyten-db valkey main --bot <name> -- DBSIZE
 
 # Alternative: Manual tunnel approach
-fiftyten-db tunnel dev -d indicator
+fiftyten-db tunnel main -d indicator
 # In another terminal:
 psql -h localhost -p 5433 -d indicator_db -U fiftyten
 ```
@@ -169,9 +130,9 @@ psql -h localhost -p 5433 -d indicator_db -U fiftyten
 fiftyten-db psql <environment> [options]
 
 # Examples
-fiftyten-db psql dev -d indicator      # Connect to indicator database
-fiftyten-db psql dev -d copytrading    # Connect to copytrading database
-fiftyten-db psql main -d platform -p 5434  # Use different port
+fiftyten-db psql main -d indicator      # Connect to indicator database
+fiftyten-db psql main -d quant         # Connect to quant cold-storage database
+fiftyten-db psql main -d indicator -p 5434  # Use different port
 ```
 
 #### `tunnel` - Create Database Tunnel
@@ -179,8 +140,8 @@ fiftyten-db psql main -d platform -p 5434  # Use different port
 fiftyten-db tunnel <environment> [options]
 
 # Examples
-fiftyten-db tunnel dev -d indicator    # Tunnel to platform database on port 5433
-fiftyten-db tunnel main -d copytrading -p 5434  # Tunnel to copytrading database
+fiftyten-db tunnel main -d indicator    # Tunnel to indicator database on port 5433
+fiftyten-db tunnel main -d quant -p 5434  # Tunnel to quant cold-storage database
 ```
 
 #### `databases` - Discover Available Databases
@@ -188,12 +149,12 @@ fiftyten-db tunnel main -d copytrading -p 5434  # Tunnel to copytrading database
 fiftyten-db databases <environment>
 
 # Examples
-fiftyten-db databases dev             # See what databases are available in dev
+fiftyten-db databases main             # See what databases are available
 ```
 
 **Common Options:**
 - `-p, --port <port>` - Local port for tunnel (default: 5433)
-- `-d, --database <database>` - Database name (platform, copytrading, etc.)
+- `-d, --database <database>` - Database name (indicator, quant, etc.)
 - `--region <region>` - AWS region (default: us-west-1)
 
 #### `connect` - Direct Database Connection
@@ -201,8 +162,8 @@ fiftyten-db databases dev             # See what databases are available in dev
 fiftyten-db connect <environment> [options]
 
 # Examples
-fiftyten-db connect dev -d platform   # Connect to indicator database
-fiftyten-db connect main -d copytrading  # Connect to copytrading database
+fiftyten-db connect main -d indicator   # Connect to indicator database
+fiftyten-db connect main -d quant        # Connect to quant cold-storage database
 ```
 
 #### `ssh` - SSH into Bastion Host
@@ -210,7 +171,6 @@ fiftyten-db connect main -d copytrading  # Connect to copytrading database
 fiftyten-db ssh <environment>
 
 # Examples
-fiftyten-db ssh dev                   # SSH into dev bastion host
 fiftyten-db ssh main                  # SSH into production bastion host
 ```
 
@@ -219,7 +179,6 @@ fiftyten-db ssh main                  # SSH into production bastion host
 fiftyten-db info <environment>
 
 # Examples
-fiftyten-db info dev                  # Show dev environment info
 fiftyten-db info main                 # Show production environment info
 ```
 
@@ -227,6 +186,36 @@ fiftyten-db info main                 # Show production environment info
 ```bash
 fiftyten-db list                      # Show all available environments
 ```
+
+### Cache (Valkey) Commands
+
+#### `valkey` - Inspect & Guarded-Modify the Shared Valkey Cache
+Run Valkey/ElastiCache commands through the bastion tunnel. Reads run freely; writes are gated. Aliased as `redis`. Requires `valkey-cli` (`brew install valkey`; `redis-cli` also works).
+
+```bash
+fiftyten-db valkey <environment> [command...] [options]
+
+# Interactive session for a quant bot's hot state (write-capable)
+fiftyten-db valkey main --bot sam --write
+
+# One-shot read (no --write needed)
+fiftyten-db valkey main --bot sam -- KEYS 'state:*'
+
+# One-shot write (requires --write)
+fiftyten-db valkey main --bot sam --write -- SET foo bar
+
+# Raw DB index instead of a bot
+fiftyten-db valkey main -n 0 -- INFO keyspace
+```
+
+**Options:**
+- `--bot <name>` - Resolve the Valkey logical DB index for a quant bot (via SSM)
+- `-n, --db <index>` - Raw logical DB index (0-15)
+- `-w, --write` - Allow mutating commands (required for interactive sessions and one-shot writes)
+- `-y, --yes` - Skip confirmation prompts
+- `-p, --port <port>` - Local tunnel port (default: 6379)
+
+**Write guard:** reads run without flags; mutations require `--write`; destructive commands (`FLUSHALL`/`FLUSHDB`/`DEL`/…) also prompt for confirmation. ⚠️ The hot cache is authoritative live-trading state — writes take effect immediately.
 
 ### DynamoDB Commands
 
@@ -286,270 +275,16 @@ fiftyten-db dynamo get-item fiftyten-exchange-credentials-dev \
 - **Safe Operations**: Built-in protection against accidental credential exposure
 - **Audit Trail**: All operations are logged for security compliance
 
-### Migration Commands
-
-Complete AWS DMS migration system with embedded infrastructure:
-
-#### `migrate deploy` - Deploy Migration Infrastructure
-```bash
-fiftyten-db migrate deploy <environment> [options]
-
-# Options:
-# --type <migration-type>   Migration type: full-load or full-load-and-cdc (default: full-load)
-
-# Features:
-# • Embedded CloudFormation templates (no external dependencies)
-# • Auto-discovers VPC and subnet configuration
-# • Interactive prompts for legacy database credentials
-# • Target database auto-discovery from existing infrastructure
-
-# Examples
-fiftyten-db migrate deploy dev                    # Deploy with full-load migration
-fiftyten-db migrate deploy dev --type full-load-and-cdc  # Deploy with CDC
-```
-
-#### `migrate targets` - List Available Target Databases
-```bash
-fiftyten-db migrate targets <environment>
-
-# Shows available target databases discovered from storage infrastructure
-
-# Examples
-fiftyten-db migrate targets dev       # List target databases in dev environment
-```
-
-#### `migrate start` - Start Migration Task
-```bash
-fiftyten-db migrate start <environment>
-
-# Examples
-fiftyten-db migrate start dev         # Start migration (type determined by deployment)
-```
-
-#### `migrate status` - Monitor Migration Progress
-```bash
-fiftyten-db migrate status <environment>
-
-# Examples
-fiftyten-db migrate status dev        # Show detailed migration progress
-```
-
-#### `migrate validate` - Validate Migration Data
-```bash
-fiftyten-db migrate validate <environment>
-
-# Examples
-fiftyten-db migrate validate dev      # Comprehensive data validation
-```
-
-#### `migrate stop` - Stop Migration Task
-```bash
-fiftyten-db migrate stop <environment>
-
-# Examples
-fiftyten-db migrate stop dev          # Stop migration (use before cutover)
-```
-
-#### `migrate cleanup` - Cleanup Migration Resources
-```bash
-fiftyten-db migrate cleanup <environment>
-
-# Examples
-fiftyten-db migrate cleanup dev       # Destroy migration infrastructure
-```
-
-#### PostgreSQL Migration Commands (Recommended)
-
-Native PostgreSQL migration using pg_dump/psql with automatic tunneling:
-
-#### `migrate pg-test` - Test Database Connections
-```bash
-fiftyten-db migrate pg-test <environment> [options]
-
-# Test with built-in legacy database configuration
-fiftyten-db migrate pg-test dev
-fiftyten-db migrate pg-test main
-
-# Test with external source database
-fiftyten-db migrate pg-test dev \
-  --source-endpoint external-db.example.com \
-  --source-username postgres \
-  --source-password "password123"
-```
-
-#### `migrate pg-dump` - PostgreSQL Migration
-```bash
-fiftyten-db migrate pg-dump <environment> [options]
-
-# Basic data-only migration (recommended)
-fiftyten-db migrate pg-dump dev --source-db legacy --data-only
-fiftyten-db migrate pg-dump main --source-db legacy --data-only
-
-# Full migration with schema
-fiftyten-db migrate pg-dump dev --source-db legacy
-
-# External database migration
-fiftyten-db migrate pg-dump dev \
-  --source-endpoint external-db.example.com \
-  --source-username postgres \
-  --source-password "password123" \
-  --data-only
-
-# Advanced: Table filtering
-fiftyten-db migrate pg-dump dev --source-db legacy \
-  --data-only \
-  --skip-tables "migrations,typeorm_metadata"
-
-fiftyten-db migrate pg-dump dev --source-db legacy \
-  --data-only \
-  --include-tables "users,products,orders"
-```
-
-**Options:**
-- `--source-db <database>` - Use built-in legacy database configuration
-- `--target-db <database>` - Target database name (default: indicator)
-- `--source-endpoint <endpoint>` - External source database endpoint
-- `--source-username <username>` - External source database username
-- `--source-password <password>` - External source database password
-- `--data-only` - Dump data only, preserve existing schema
-- `--skip-tables <tables>` - Comma-separated list of tables to skip
-- `--include-tables <tables>` - Include only these tables (comma-separated)
-
-#### `migrate pg-stats` - Migration Verification
-```bash
-fiftyten-db migrate pg-stats <environment> [options]
-
-# Compare with built-in legacy database
-fiftyten-db migrate pg-stats dev --source-db legacy
-fiftyten-db migrate pg-stats main --source-db legacy
-
-# Compare with external database
-fiftyten-db migrate pg-stats dev \
-  --source-endpoint external-db.example.com \
-  --source-username postgres \
-  --source-password "password123"
-```
-
-**PostgreSQL Migration Features:**
-- **Native Tools**: Uses pg_dump and psql for maximum PostgreSQL compatibility
-- **Sequential Tunneling**: Creates source tunnel → dump → close → target tunnel → restore → close
-- **Automatic Verification**: Table-by-table row count comparison
-- **CDK-First Discovery**: Modern bastion discovery with fallback patterns
-- **Security Integration**: Automatic password retrieval from AWS Secrets Manager
-- **Error Handling**: Clear PostgreSQL error messages with context
-- **Table Filtering**: Advanced include/exclude table options
-- **Schema Flexibility**: Data-only mode preserves existing target schema
-
 ## Workflows
-
-### PostgreSQL Migration Workflow (Recommended)
-
-Simple and reliable PostgreSQL-to-PostgreSQL migration workflow:
-
-```bash
-# 1. Test connections to both source and target databases
-fiftyten-db migrate pg-test dev --source-db legacy
-
-# 2. Perform data-only migration (preserves existing schema)
-fiftyten-db migrate pg-dump dev --source-db legacy --data-only
-
-# 3. Verify migration success with table-by-table comparison
-fiftyten-db migrate pg-stats dev --source-db legacy
-
-# 4. (Optional) Advanced migration with table filtering
-fiftyten-db migrate pg-dump dev --source-db legacy \
-  --data-only \
-  --skip-tables "migrations,typeorm_metadata"
-```
-
-#### Key Advantages
-- **No Infrastructure Setup**: Works immediately without CloudFormation deployment
-- **PostgreSQL Native**: Perfect compatibility using pg_dump/psql
-- **Automatic Tunneling**: Handles Session Manager tunnels automatically
-- **Built-in Verification**: Table-by-table row count validation
-- **Error Recovery**: Clear error messages and automatic cleanup
-
-#### Migration from External Database
-```bash
-# Test external database connection
-fiftyten-db migrate pg-test dev \
-  --source-endpoint external-db.example.com \
-  --source-username postgres \
-  --source-password "password123"
-
-# Migrate data from external database
-fiftyten-db migrate pg-dump dev \
-  --source-endpoint external-db.example.com \
-  --source-username postgres \
-  --source-password "password123" \
-  --data-only
-
-# Verify migration
-fiftyten-db migrate pg-stats dev \
-  --source-endpoint external-db.example.com \
-  --source-username postgres \
-  --source-password "password123"
-```
-
-### AWS DMS Migration Workflow
-
-Complete AWS DMS migration workflow with embedded infrastructure:
-
-#### Migration Advantages
-- **Standalone Operation**: All infrastructure templates embedded in CLI
-- **Auto-discovery**: VPC, subnets, and target databases discovered automatically  
-- **Migration Type Selection**: Choose between full-load or full-load-and-cdc
-- **Portable**: Works on any developer machine with AWS credentials
-
-```bash
-# 1. Ensure you have the required IAM permissions
-# Apply DMSMigrationDeploymentAccess policy (one-time setup)
-
-# 2. Optional: List available target databases
-fiftyten-db migrate targets dev
-
-# 3. Deploy migration infrastructure (standalone - no local repos required)
-fiftyten-db migrate deploy dev --type full-load
-# Auto-discovers target databases, prompts for legacy DB details
-
-# 4. Start migration
-fiftyten-db migrate start dev
-
-# 5. Monitor progress (run periodically)
-fiftyten-db migrate status dev
-
-# 6. Validate data integrity
-fiftyten-db migrate validate dev
-
-# 7. When migration is complete and validated:
-# Stop the migration task (prepare for cutover)
-fiftyten-db migrate stop dev
-
-# 8. Update application to use new database
-# (Point your app to the new database endpoint)
-
-# 9. Cleanup migration resources
-fiftyten-db migrate cleanup dev
-```
-
-#### Migration Features
-- **Embedded CloudFormation Templates**: No external repository dependencies
-- **Auto-Discovery**: VPC, subnets, and target databases discovered automatically
-- **Migration Type Selection**: Full-load or full-load-and-cdc based on requirements
-- **Security Integration**: Legacy credentials never stored, uses AWS Secrets Manager
-- **Progress Monitoring**: Real-time table-by-table statistics and error tracking
-- **Data Validation**: Comprehensive row count and integrity validation
-- **CloudWatch Integration**: Automated monitoring and alerting
-- **Infrastructure as Code**: Complete DMS setup via CloudFormation
 
 ### Database Administration
 
 ```bash
 # Recommended: One command approach
-fiftyten-db psql dev -d indicator
+fiftyten-db psql main -d indicator
 
 # Alternative: Manual tunnel for GUI tools
-fiftyten-db tunnel dev -d indicator
+fiftyten-db tunnel main -d indicator
 # Then connect with your favorite tool:
 psql -h localhost -p 5433 -d indicator_db -U fiftyten
 # OR
@@ -562,18 +297,18 @@ dbeaver (connect to localhost:5433)
 
 ```bash
 # One command for quick queries (recommended)
-fiftyten-db psql dev -d indicator
+fiftyten-db psql main -d indicator
 
 # Alternative: Direct connection approach
-fiftyten-db connect dev -d platform
-# Then run: psql -h DATABASE_HOST -p 5432 -d platform -U fiftyten
+fiftyten-db connect main -d indicator
+# Then run: psql -h DATABASE_HOST -p 5432 -d indicator_db -U fiftyten
 ```
 
 ### Manual Operations
 
 ```bash
 # SSH into bastion for manual operations
-fiftyten-db ssh dev
+fiftyten-db ssh main
 # Then you have full shell access with pre-installed tools
 ```
 
@@ -597,7 +332,7 @@ fiftyten-db ssh dev
 
 ### "Port 5433 is already in use"
 - The CLI will automatically suggest available ports
-- Use a different port: `fiftyten-db psql dev -d indicator -p 5434`
+- Use a different port: `fiftyten-db psql main -d indicator -p 5434`
 - Find what's using the port: `lsof -i :5433`
 - Stop local PostgreSQL if running: `brew services stop postgresql`
 
@@ -616,7 +351,7 @@ fiftyten-db ssh dev
 ```bash
 # Clone the repository
 git clone <repository-url>
-cd cli-tool
+cd fiftyten-cli-tools
 
 # Install dependencies
 npm install
@@ -625,7 +360,7 @@ npm install
 npm run build
 
 # Test locally
-node dist/index.js tunnel dev
+node packages/db-toolkit/bin/fiftyten-db.js tunnel main
 ```
 
 ## Security

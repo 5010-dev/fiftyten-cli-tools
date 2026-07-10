@@ -6,16 +6,16 @@
 [![Node.js Version](https://img.shields.io/badge/node-%3E%3D16.0.0-brightgreen.svg)](https://nodejs.org/)
 [![pnpm](https://img.shields.io/badge/pnpm-%3E%3D8.0.0-blue.svg)](https://pnpm.io/)
 
-A comprehensive command-line toolkit for the Fiftyten platform ecosystem, providing secure database connectivity, AWS DMS migrations, DynamoDB operations, and infrastructure management through integrated AWS services.
+A comprehensive command-line toolkit for the Fiftyten platform ecosystem, providing secure database connectivity, Valkey cache access, DynamoDB operations, and infrastructure management through integrated AWS services.
 
 ## 🚀 Tools Available
 
 ### [@fiftyten/db-toolkit](./packages/db-toolkit)
-Complete database toolkit with standalone AWS DMS migrations, secure database connectivity via Session Manager, DynamoDB operations, and infrastructure management. Current version: **v2.3.0**
+Complete database toolkit with secure database connectivity via Session Manager, Valkey cache access, DynamoDB operations, and infrastructure management.
 
 **Core Capabilities:**
 - **Database Connectivity**: Secure connections via AWS Session Manager with automatic MFA and password management
-- **AWS DMS Migrations**: Complete database migration system with embedded CloudFormation templates
+- **Valkey Cache Access**: Guarded read/write to the shared ElastiCache (Valkey) via the bastion tunnel
 - **DynamoDB Operations**: Table management and data operations with built-in security filtering
 - **Infrastructure Management**: VPC/subnet auto-discovery, security group configuration, and CloudFormation deployment
 - **Security & Compliance**: MFA authentication, credential management, and audit trail support
@@ -30,24 +30,18 @@ brew install postgresql awscli
 pnpm add -g @fiftyten/db-toolkit
 
 # 3. Apply IAM permissions (one-time)
-# Attach DMSMigrationDeploymentAccess policy to your AWS user/group
+# Attach BastionHostSessionManagerAccess policy to your AWS user/group
 
 # 4. Database connections
-fiftyten-db psql dev -d indicator
+fiftyten-db psql main -d indicator
+fiftyten-db psql main -d quant
 
-# 5. DynamoDB operations (sensitive fields auto-filtered)
+# 5. Valkey cache (read + guarded write)
+fiftyten-db valkey main --bot <name> -- DBSIZE
+
+# 6. DynamoDB operations (sensitive fields auto-filtered)
 fiftyten-db dynamo list-tables
 fiftyten-db dynamo scan trading_orders --limit 10
-
-# 6. Database migration options
-# PostgreSQL migration (recommended for PostgreSQL-to-PostgreSQL)
-fiftyten-db migrate pg-test dev              # Test connections
-fiftyten-db migrate pg-dump dev --source-db legacy --data-only  # Migrate data
-fiftyten-db migrate pg-stats dev --source-db legacy             # Verify migration
-
-# AWS DMS migration (for complex scenarios or cross-database)
-fiftyten-db migrate deploy dev               # Deploy DMS infrastructure
-fiftyten-db migrate start dev                # Start migration
 ```
 
 ## 📦 Installation
@@ -64,6 +58,9 @@ brew install postgresql
 
 # 3. AWS CLI (if not already installed)
 brew install awscli
+
+# 4. Valkey CLI (for the `valkey` cache command; redis-cli also works)
+brew install valkey
 ```
 
 ### Global Installation (Recommended)
@@ -84,6 +81,7 @@ npm install -g @fiftyten/db-toolkit
 fiftyten-db --version
 session-manager-plugin
 psql --version
+valkey-cli --version
 aws --version
 ```
 
@@ -92,8 +90,8 @@ aws --version
 #### With pnpm
 ```bash
 # Database connections
-pnpm dlx @fiftyten/db-toolkit psql dev -d platform
-pnpm dlx @fiftyten/db-toolkit tunnel dev -d platform
+pnpm dlx @fiftyten/db-toolkit psql main -d indicator
+pnpm dlx @fiftyten/db-toolkit tunnel main -d indicator
 
 # DynamoDB operations
 pnpm dlx @fiftyten/db-toolkit dynamo list-tables
@@ -103,8 +101,8 @@ pnpm dlx @fiftyten/db-toolkit dynamo scan trading_orders --limit 10
 #### With npm
 ```bash
 # Database connections
-npx @fiftyten/db-toolkit psql dev -d platform
-npx @fiftyten/db-toolkit tunnel dev -d platform
+npx @fiftyten/db-toolkit psql main -d indicator
+npx @fiftyten/db-toolkit tunnel main -d indicator
 
 # DynamoDB operations
 npx @fiftyten/db-toolkit dynamo list-tables
@@ -203,111 +201,38 @@ pnpm --filter package-name publish --access public
 #### One-Command Connection (Recommended)
 ```bash
 # Connect to indicator database with automatic password
-fiftyten-db psql dev -d indicator
+fiftyten-db psql main -d indicator
 
-# Connect to copy trading database  
-fiftyten-db psql dev -d copytrading
+# Connect to quant cold-storage database
+fiftyten-db psql main -d quant
 
 # Use different port if needed
-fiftyten-db psql dev -d indicator -p 5433
+fiftyten-db psql main -d indicator -p 5433
 ```
 
 #### Database Discovery
 ```bash
 # See what databases are available
-fiftyten-db databases dev
+fiftyten-db databases main
 ```
 
 #### Manual Tunnel Commands (Advanced)
 ```bash
 # Create tunnel to indicator database
-fiftyten-db tunnel dev -d indicator
+fiftyten-db tunnel main -d indicator
 
-# Connect directly to copytrading database
-fiftyten-db connect main -d copytrading
+# Connect directly to quant cold-storage database
+fiftyten-db connect main -d quant
 
 # SSH into bastion host
-fiftyten-db ssh dev
+fiftyten-db ssh main
 
 # Show connection information
-fiftyten-db info dev
+fiftyten-db info main
 
 # List all available environments
 fiftyten-db list
 ```
-
-### PostgreSQL Database Migration (Recommended)
-
-Simple and reliable PostgreSQL-to-PostgreSQL migration using native pg_dump/psql tools with automatic tunneling and credential management.
-
-**Native PostgreSQL Tools**: Uses pg_dump and psql for maximum compatibility and reliability.
-
-#### Quick Migration Examples
-```bash
-# Test connections before migration
-fiftyten-db migrate pg-test dev
-
-# Basic migration (data-only, preserves existing schema)
-fiftyten-db migrate pg-dump dev --source-db legacy --data-only
-
-# Full migration with schema (overwrites target schema)
-fiftyten-db migrate pg-dump dev --source-db legacy
-
-# Verify migration success with table-by-table comparison
-fiftyten-db migrate pg-stats dev --source-db legacy
-```
-
-#### Migration from External Database
-```bash
-# Migrate from external PostgreSQL database
-fiftyten-db migrate pg-dump dev \
-  --source-endpoint external-db.example.com \
-  --source-username postgres \
-  --source-password "password123" \
-  --data-only
-
-# Advanced: Skip problematic tables
-fiftyten-db migrate pg-dump dev \
-  --source-endpoint external-db.example.com \
-  --source-username postgres \
-  --source-password "password123" \
-  --skip-tables "migrations,typeorm_metadata" \
-  --data-only
-```
-
-#### Key Advantages Over DMS
-✅ **PostgreSQL-Native**: Uses pg_dump/psql for perfect PostgreSQL compatibility  
-✅ **No Infrastructure Setup**: Ready to use immediately  
-✅ **Better Error Handling**: Clear PostgreSQL error messages  
-✅ **Table Filtering**: Include/exclude specific tables during migration  
-✅ **Data-Only Mode**: Preserve existing schema, migrate data only  
-✅ **Sequential Tunneling**: Eliminates Session Manager resource conflicts  
-✅ **Automatic Verification**: Built-in table-by-table comparison  
-
-### AWS DMS Migration (Enterprise/Cross-Database)
-
-Complete AWS Database Migration Service with embedded CloudFormation templates for complex migration scenarios.
-
-**Best for**: Cross-database migrations, large-scale enterprise migrations, ongoing CDC replication.
-
-```bash
-# Deploy migration infrastructure
-fiftyten-db migrate deploy dev --type full-load-and-cdc
-
-# Start migration
-fiftyten-db migrate start dev
-
-# Monitor progress
-fiftyten-db migrate status dev
-
-# Validate and cleanup
-fiftyten-db migrate validate dev
-fiftyten-db migrate cleanup dev
-```
-
-**When to Use DMS vs pg-dump:**
-- **Use pg-dump**: PostgreSQL → PostgreSQL (simpler, faster, more reliable)
-- **Use DMS**: Cross-database migrations, large enterprise migrations, ongoing CDC replication
 
 ### DynamoDB Operations
 
@@ -341,17 +266,37 @@ fiftyten-db dynamo get-item trading_orders "id:trd_5f8a2b3c4d5e6f7g8h9i"
 - **Safe Data Operations**: Built-in protection against accidental credential exposure
 - **Audit Trail**: All DynamoDB operations are logged for security compliance
 
+### Valkey Cache
+
+Inspect and (guardedly) modify the shared Valkey/ElastiCache cluster through the bastion tunnel. Reads run freely; writes require `--write`, and destructive commands prompt for confirmation. Requires `valkey-cli` (`brew install valkey`).
+
+```bash
+# One-shot read against a quant bot's hot state (no --write)
+fiftyten-db valkey main --bot sam -- KEYS 'state:*'
+
+# Interactive session (write-capable)
+fiftyten-db valkey main --bot sam --write
+
+# One-shot write (requires --write)
+fiftyten-db valkey main --bot sam --write -- SET foo bar
+
+# Raw logical DB index instead of a bot
+fiftyten-db valkey main -n 0 -- DBSIZE
+```
+
+⚠️  The hot cache is authoritative live-trading state — writes take effect immediately.
+
 ### Team Workflow
 ```bash
 # 1. Install once globally with pnpm
 pnpm add -g @fiftyten/db-toolkit
 
 # 2. One command for complete database access (recommended)
-fiftyten-db psql dev -d indicator
+fiftyten-db psql main -d indicator
 
 # Alternative: Manual tunnel approach
 # 2a. Create tunnel (will prompt for MFA if required)
-fiftyten-db tunnel dev -d indicator
+fiftyten-db tunnel main -d indicator
 # 2b. In another terminal, use psql
 psql -h localhost -p 5433 -d indicator_db -U fiftyten
 ```
@@ -365,9 +310,9 @@ The toolkit provides enterprise-grade security with intelligent MFA handling:
 # Single device auto-selection (seamless experience)
 🔐 MFA authentication required
 ✅ Auto-detected MFA device: arn:aws:iam::ACCOUNT:mfa/ED_GalaxyS24_Ultra
-? Enter MFA token code: 123456
+Enter MFA token code: 123456
 ✅ MFA authentication successful!
-Session expires: 12/31/2023, 2:00:00 PM
+Session expires: <~1 hour from now>
 ```
 
 #### Multiple Device Support
@@ -375,10 +320,9 @@ Session expires: 12/31/2023, 2:00:00 PM
 # Interactive device selection for multiple MFA devices
 🔐 MFA authentication required
 Multiple MFA devices found. Please select one:
-
-? Select MFA Device: 
-❯ ED_GalaxyS24_Ultra (arn:aws:iam::ACCOUNT:mfa/ED_GalaxyS24_Ultra)
-  backup-device (arn:aws:iam::ACCOUNT:mfa/backup-device)
+1. ED_GalaxyS24_Ultra (arn:aws:iam::ACCOUNT:mfa/ED_GalaxyS24_Ultra)
+2. backup-device (arn:aws:iam::ACCOUNT:mfa/backup-device)
+Select option (number): 1
 ```
 
 #### Security Features
@@ -390,19 +334,12 @@ Multiple MFA devices found. Please select one:
 ## 🎯 Key Features
 
 ### Database Connectivity
-- **One-Command Connection**: `fiftyten-db psql dev -d indicator` - complete tunnel + credentials + psql launch
-- **Multi-Database Support**: indicator, copytrading, platform, or any configured database
-- **Database Discovery**: `fiftyten-db databases dev` to see available databases
+- **One-Command Connection**: `fiftyten-db psql main -d indicator` - complete tunnel + credentials + psql launch
+- **Multi-Database Support**: indicator, quant, or any configured database
+- **Database Discovery**: `fiftyten-db databases main` to see available databases
+- **Valkey Cache Access**: `fiftyten-db valkey main --bot <name>` - guarded read/write to the shared ElastiCache (Valkey)
 - **Automatic Password Retrieval**: Seamless integration with AWS Secrets Manager
 - **Session Manager Integration**: Secure connections without SSH keys or bastion access
-
-### Migration System
-- **AWS DMS Integration**: Enterprise-grade database migration service
-- **Migration Type Selection**: Full-load or full-load-and-cdc based on requirements
-- **Embedded Infrastructure**: CloudFormation templates built into CLI (no external dependencies)
-- **Auto-Discovery**: Automatic VPC, subnet, and security group detection
-- **Progress Monitoring**: Real-time table-by-table migration statistics
-- **Data Validation**: Comprehensive row count and integrity validation
 
 ### DynamoDB Operations
 - **Table Management**: List, describe, and manage DynamoDB tables
@@ -441,7 +378,7 @@ Multiple MFA devices found. Please select one:
 
 | Tool | Description | Status | Version |
 |------|-------------|--------|---------|
-| [db-toolkit](./packages/db-toolkit) | Complete database toolkit with AWS DMS migrations, secure connectivity, and DynamoDB operations | ✅ Active | 2.3.0 |
+| [db-toolkit](./packages/db-toolkit) | Complete database toolkit: connectivity, Valkey cache, and DynamoDB operations | ✅ Active | see npm badge |
 
 ## 🆘 Support
 
@@ -462,7 +399,7 @@ brew install postgresql
 **"Port 5432 is already in use"**
 ```bash
 # The CLI will automatically suggest solutions, or use a different port
-fiftyten-db psql dev -d indicator -p 5433
+fiftyten-db psql main -d indicator -p 5433
 ```
 
 **"MFA authentication required"**
@@ -486,5 +423,5 @@ MIT License - see [LICENSE](LICENSE) file for details.
 ## 🔗 Related Projects
 
 - [5010-indicator](https://github.com/5010-dev/5010-indicator) - Main platform
-- [5010-indicator-storage-infra](https://github.com/5010-dev/5010-indicator-storage-infra) - Storage infrastructure
+- [indicator-storage-infra](https://github.com/5010-dev/indicator-storage-infra) - Storage infrastructure
 - [indicator-ecs-infra](https://github.com/5010-dev/indicator-ecs-infra) - ECS infrastructure
