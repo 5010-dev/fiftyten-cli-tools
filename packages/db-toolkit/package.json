@@ -1,7 +1,7 @@
 {
   "name": "@fiftyten/db-toolkit",
-  "version": "2.3.1",
-  "description": "Complete database toolkit: connections, migration, and operations via AWS Session Manager",
+  "version": "2.3.2",
+  "description": "Complete database toolkit: connections, Valkey cache, and operations via AWS Session Manager",
   "main": "index.js",
   "bin": {
     "fiftyten-db": "./bin/fiftyten-db.js"
@@ -15,10 +15,9 @@
     "fiftyten",
     "5010-technologies",
     "database",
+    "valkey",
     "aws",
     "session-manager",
-    "migration",
-    "dms",
     "cli"
   ],
   "author": "5010 Technologies Team",
@@ -33,14 +32,10 @@
     "@aws-sdk/client-secrets-manager": "^3.0.0",
     "@aws-sdk/client-dynamodb": "^3.0.0",
     "@aws-sdk/lib-dynamodb": "^3.0.0",
-    "@aws-sdk/client-cloudformation": "^3.0.0",
-    "@aws-sdk/client-database-migration-service": "^3.0.0",
-    "@aws-sdk/client-rds": "^3.0.0",
-    "inquirer": "^9.0.0"
+    "@aws-sdk/client-cloudformation": "^3.0.0"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
-    "@types/inquirer": "^9.0.0",
     "typescript": "^5.0.0"
   },
   "engines": {

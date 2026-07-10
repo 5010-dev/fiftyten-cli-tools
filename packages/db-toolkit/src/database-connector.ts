@@ -28,6 +28,17 @@ export interface DatabaseInfo {
 	DATABASE_SECRET_ARN: string;
 }
 
+// quant breaks the {service}-api convention: its param lives at /indicator/quant/{env}/...
+const DATABASE_SSM_SEGMENTS: Record<string, string> = {
+	indicator: 'indicator-api',
+	quant: 'quant',
+};
+
+function databaseParameterName(database: string, environment: string): string {
+	const segment = DATABASE_SSM_SEGMENTS[database] ?? `${database}-api`;
+	return `/indicator/${segment}/${environment}/database-environment-variables`;
+}
+
 export class DatabaseConnector {
 	private ec2Client: EC2Client;
 	private ssmClient: SSMClient;
@@ -180,10 +191,8 @@ export class DatabaseConnector {
 	/**
 	 * Get database information from SSM
 	 */
-	private async getDatabaseInfo(environment: string, database: string = 'indicator'): Promise<DatabaseInfo> {
-		const parameterName = database === 'indicator'
-			? `/indicator/indicator-api/${environment}/database-environment-variables`
-			: `/indicator/${database}-api/${environment}/database-environment-variables`;
+	async getDatabaseInfo(environment: string, database: string = 'indicator'): Promise<DatabaseInfo> {
+		const parameterName = databaseParameterName(database, environment);
 
 		try {
 			const response = await this.callWithMfaRetry(async () => {
@@ -487,7 +496,7 @@ export class DatabaseConnector {
 
 		console.log(chalk.gray('Usage examples:'));
 		console.log(chalk.cyan('  fiftyten-db tunnel dev -d indicator     # Create tunnel to indicator database'));
-		console.log(chalk.cyan('  fiftyten-db connect main -d copytrading # Connect to copytrading database'));
+		console.log(chalk.cyan('  fiftyten-db psql main -d quant           # Connect to quant cold-storage database'));
 		console.log(chalk.cyan('  fiftyten-db ssh dev                     # SSH into dev bastion host'));
 		console.log(chalk.cyan('  fiftyten-db psql dev -d indicator        # Connect with automatic password'));
 	}
@@ -499,7 +508,7 @@ export class DatabaseConnector {
 		console.log(chalk.blue(`🔍 Discovering available databases for ${environment.toUpperCase()}...`));
 		console.log('');
 
-		const databases = ['indicator', 'copytrading']; // Common database types
+		const databases = ['indicator', 'quant']; // Known logical databases
 		const available: string[] = [];
 
 		for (const database of databases) {

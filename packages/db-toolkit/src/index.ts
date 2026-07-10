@@ -4,8 +4,7 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import { DatabaseConnector } from './database-connector';
 import { DynamoDBConnector } from './dynamodb-connector';
-import { MigrationManager, MigrationConfig } from './migration-manager';
-import { PgMigrationManager, PgMigrationConfig } from './pg-migration-manager';
+import { RedisConnector } from './redis-connector';
 import { version } from '../package.json';
 
 const program = new Command();
@@ -21,7 +20,7 @@ program
 	.description('Create SSH tunnel to database via Session Manager')
 	.argument('<environment>', 'Environment (dev/main)')
 	.option('-p, --port <port>', 'Local port for tunnel', '5433')
-	.option('-d, --database <app>', 'Application database (indicator, copytrading, etc.)', 'indicator')
+	.option('-d, --database <app>', 'Application database (indicator, quant)', 'indicator')
 	.option('--region <region>', 'AWS region', 'us-west-1')
 	.action(async (environment, options) => {
 		try {
@@ -38,7 +37,7 @@ program
 	.command('connect')
 	.description('Connect directly to database via Session Manager')
 	.argument('<environment>', 'Environment (dev/main)')
-	.option('-d, --database <app>', 'Application database (indicator, copytrading, etc.)', 'indicator')
+	.option('-d, --database <app>', 'Application database (indicator, quant)', 'indicator')
 	.option('--region <region>', 'AWS region', 'us-west-1')
 	.action(async (environment, options) => {
 		try {
@@ -103,7 +102,7 @@ program
 	.description('Connect to database with automatic tunnel and password retrieval')
 	.argument('<environment>', 'Environment (dev/main)')
 	.option('-p, --port <port>', 'Local port for tunnel', '5433')
-	.option('-d, --database <app>', 'Application database (indicator, copytrading, etc.)', 'indicator')
+	.option('-d, --database <app>', 'Application database (indicator, quant)', 'indicator')
 	.option('--region <region>', 'AWS region', 'us-west-1')
 	.action(async (environment, options) => {
 		try {
@@ -142,19 +141,66 @@ program
 	.command('password')
 	.description('Get database password for manual configuration')
 	.argument('<environment>', 'Environment (dev/main)')
-	.option('-d, --database <app>', 'Application database (indicator, copytrading, etc.)', 'indicator')
+	.option('-d, --database <app>', 'Application database (indicator, quant)', 'indicator')
 	.option('--region <region>', 'AWS region', 'us-west-1')
 	.action(async (environment, options) => {
 		try {
 			const connector = new DatabaseConnector(options.region);
+			const dbInfo = await connector.getDatabaseInfo(environment, options.database);
 			const password = await connector.getDatabasePassword(environment, options.database);
 			console.log(chalk.green('✅ Database password retrieved:'));
 			console.log(chalk.yellow(password));
 			console.log('');
 			console.log(chalk.gray('💡 DATABASE_URL for manual configuration:'));
-			console.log(chalk.cyan(`DATABASE_URL=postgres://fiftyten:${password}@localhost:5433/indicator_db`));
+			console.log(chalk.cyan(`DATABASE_URL=postgres://${dbInfo.DATABASE_USER}:${password}@localhost:5433/${dbInfo.DATABASE_NAME}`));
 		} catch (error) {
 			console.error(chalk.red('Error retrieving password:'), error instanceof Error ? error.message : String(error));
+			process.exit(1);
+		}
+	});
+
+// Valkey command - inspect and (guarded) modify the shared ElastiCache cache
+program
+	.command('valkey')
+	.aliases(['redis'])
+	.description('Run Valkey/ElastiCache commands via Session Manager (read + guarded write)')
+	.argument('<environment>', 'Environment (dev/main)')
+	.argument('[command...]', 'Valkey command to run once; omit for an interactive redis-cli session')
+	.option('--bot <name>', 'Resolve the Valkey logical DB index for this quant bot')
+	.option('-n, --db <index>', 'Raw Valkey logical DB index (0-15); ignored when --bot is set')
+	.option('-w, --write', 'Allow mutating commands (required for interactive sessions and one-shot writes)')
+	.option('-y, --yes', 'Skip confirmation prompts')
+	.option('-p, --port <port>', 'Local port for the tunnel', '6379')
+	.option('--region <region>', 'AWS region', 'us-west-1')
+	.addHelpText('after', `
+Examples:
+  ${chalk.gray('# Interactive write-capable session for a bot')}
+  ${chalk.cyan('fiftyten-db valkey main --bot sam --write')}
+
+  ${chalk.gray('# One-shot read (no --write needed)')}
+  ${chalk.cyan("fiftyten-db valkey main --bot sam -- KEYS 'state:*'")}
+
+  ${chalk.gray('# One-shot write (requires --write)')}
+  ${chalk.cyan('fiftyten-db valkey main --bot sam --write -- SET foo bar')}
+
+  ${chalk.gray('# Raw DB index instead of a bot')}
+  ${chalk.cyan('fiftyten-db valkey main -n 0 -- INFO keyspace')}
+
+Aliased as ${chalk.cyan('redis')} for muscle memory.
+⚠️  The hot cache is authoritative live-trading state. Writes take effect immediately.`)
+	.action(async (environment, command, options) => {
+		try {
+			const connector = new RedisConnector(options.region);
+			await connector.run(environment, {
+				bot: options.bot,
+				db: options.db !== undefined ? parseInt(options.db, 10) : undefined,
+				write: !!options.write,
+				yes: !!options.yes,
+				port: parseInt(options.port, 10),
+				command: command || [],
+			});
+		} catch (error) {
+			console.error(chalk.red('Error:'), error instanceof Error ? error.message : String(error));
 			process.exit(1);
 		}
 	});
@@ -288,404 +334,6 @@ Examples:
 			await connector.getItem(tableName, key);
 		} catch (error) {
 			console.error(chalk.red('Error getting item:'), error instanceof Error ? error.message : String(error));
-			process.exit(1);
-		}
-	});
-
-// Migration commands
-const migrateCommand = program
-	.command('migrate')
-	.description('Database migration operations using AWS DMS (full migration: full-load + CDC)');
-
-// Deploy migration infrastructure
-migrateCommand
-	.command('deploy')
-	.description('Deploy DMS migration infrastructure for full database migration')
-	.argument('<environment>', 'Environment (dev/main)')
-	.option('--region <region>', 'AWS region', 'us-west-1')
-	.option('--type <type>', 'Migration type: full-load or full-load-and-cdc', 'full-load-and-cdc')
-	.addHelpText('after', `
-Migration Types:
-  ${chalk.yellow('full-load')}         - One-time copy (requires source database to be stopped)
-  ${chalk.yellow('full-load-and-cdc')} - Complete migration + ongoing replication (requires logical replication)
-
-This command will prompt you for:
-  • Legacy database endpoint and credentials
-  • Target database secret ARN
-  • Notification email addresses (optional)
-
-Examples:
-  ${chalk.cyan('fiftyten-db migrate deploy dev --type full-load')}
-  ${chalk.cyan('fiftyten-db migrate deploy dev --type full-load-and-cdc')}`)
-	.action(async (environment, options) => {
-		try {
-			// Validate migration type
-			const validTypes = ['full-load', 'full-load-and-cdc'];
-			if (!validTypes.includes(options.type)) {
-				console.error(chalk.red(`❌ Invalid migration type: ${options.type}`));
-				console.error(chalk.gray(`   Valid types: ${validTypes.join(', ')}`));
-				process.exit(1);
-			}
-
-			const manager = new MigrationManager(options.region);
-
-			console.log(chalk.blue('🔧 Database Migration Setup'));
-			console.log('');
-			console.log(chalk.green('This will deploy AWS DMS infrastructure for database migration:'));
-			console.log(chalk.gray('  • Full load of all existing data'));
-			if (options.type === 'full-load-and-cdc') {
-				console.log(chalk.gray('  • Change Data Capture (CDC) for ongoing replication'));
-			}
-			console.log(chalk.gray('  • CloudWatch monitoring and SNS alerts'));
-			console.log('');
-
-			// Discover available target databases
-			const targetDatabases = await manager.discoverTargetDatabases(environment);
-
-			// Prepare target database selection
-			const targetChoices = targetDatabases.map(db => ({
-				name: `${db.friendlyName} (${db.name})`,
-				value: db.secretArn,
-				short: db.friendlyName
-			}));
-
-			// Add manual entry option
-			targetChoices.push({
-				name: 'Enter target database ARN manually',
-				value: 'manual',
-				short: 'Manual Entry'
-			});
-
-			// DMS migration requires manual configuration for specific use cases
-			console.log(chalk.yellow('💡 Consider using pg-dump for PostgreSQL-to-PostgreSQL migrations'));
-			console.log(chalk.gray('   pg-dump is simpler and more reliable for PostgreSQL migrations'));
-			console.log(chalk.gray('   Use DMS for cross-database migrations or enterprise scenarios'));
-			console.log('');
-			
-			console.log(chalk.blue('📋 DMS Migration Setup'));
-			console.log(chalk.gray('For DMS migration, you need to manually configure:'));
-			console.log(chalk.gray('• Legacy database endpoint and credentials'));
-			console.log(chalk.gray('• Target database secret ARN'));
-			console.log(chalk.gray('• Migration type (full-load or full-load-and-cdc)'));
-			console.log('');
-			
-			throw new Error('DMS migration requires manual configuration. Please update the CLI with your specific database details or use "fiftyten-db migrate pg-dump" for PostgreSQL migrations.');
-		} catch (error) {
-			console.error(chalk.red('Error deploying migration:'), error instanceof Error ? error.message : String(error));
-			process.exit(1);
-		}
-	});
-
-// Start migration task
-migrateCommand
-	.command('start')
-	.description('Start the database migration task (full-load + CDC)')
-	.argument('<environment>', 'Environment (dev/main)')
-	.option('--region <region>', 'AWS region', 'us-west-1')
-	.addHelpText('after', `
-Starts full database migration:
-  1. ${chalk.yellow('Full Load')}: Migrates all existing data
-  2. ${chalk.yellow('CDC')}: Captures ongoing changes for real-time replication
-
-Example:
-  ${chalk.cyan('fiftyten-db migrate start dev')}`)
-	.action(async (environment, options) => {
-		try {
-			const manager = new MigrationManager(options.region);
-			await manager.startMigration(environment);
-		} catch (error) {
-			console.error(chalk.red('Error starting migration:'), error instanceof Error ? error.message : String(error));
-			process.exit(1);
-		}
-	});
-
-// Stop migration task
-migrateCommand
-	.command('stop')
-	.description('Stop the database migration task')
-	.argument('<environment>', 'Environment (dev/main)')
-	.option('--region <region>', 'AWS region', 'us-west-1')
-	.addHelpText('after', `
-Stops the migration task and halts all data replication.
-Use this when ready to cutover to the new database.
-
-Example:
-  ${chalk.cyan('fiftyten-db migrate stop dev')}`)
-	.action(async (environment, options) => {
-		try {
-			const manager = new MigrationManager(options.region);
-			await manager.stopMigration(environment);
-		} catch (error) {
-			console.error(chalk.red('Error stopping migration:'), error instanceof Error ? error.message : String(error));
-			process.exit(1);
-		}
-	});
-
-// Show migration status
-migrateCommand
-	.command('status')
-	.description('Show migration task status and progress')
-	.argument('<environment>', 'Environment (dev/main)')
-	.option('--region <region>', 'AWS region', 'us-west-1')
-	.addHelpText('after', `
-Shows detailed migration progress including:
-  • Task status (running, stopped, failed)
-  • Overall progress percentage
-  • Table-by-table statistics
-  • Row counts and error counts
-
-Example:
-  ${chalk.cyan('fiftyten-db migrate status dev')}`)
-	.action(async (environment, options) => {
-		try {
-			const manager = new MigrationManager(options.region);
-			await manager.showMigrationStatus(environment);
-		} catch (error) {
-			console.error(chalk.red('Error getting migration status:'), error instanceof Error ? error.message : String(error));
-			process.exit(1);
-		}
-	});
-
-// Validate migration
-migrateCommand
-	.command('validate')
-	.description('Validate migration data and provide recommendations')
-	.argument('<environment>', 'Environment (dev/main)')
-	.option('--region <region>', 'AWS region', 'us-west-1')
-	.addHelpText('after', `
-Provides comprehensive migration validation:
-  • Data completion rates
-  • Error analysis
-  • Table-by-table status
-  • Recommendations for next steps
-
-Example:
-  ${chalk.cyan('fiftyten-db migrate validate dev')}`)
-	.action(async (environment, options) => {
-		try {
-			const manager = new MigrationManager(options.region);
-			await manager.validateMigration(environment);
-		} catch (error) {
-			console.error(chalk.red('Error validating migration:'), error instanceof Error ? error.message : String(error));
-			process.exit(1);
-		}
-	});
-
-// List available target databases
-migrateCommand
-	.command('targets')
-	.description('List available target databases for migration')
-	.argument('<environment>', 'Environment (dev/main)')
-	.option('--region <region>', 'AWS region', 'us-west-1')
-	.addHelpText('after', `
-Shows available target databases discovered from storage infrastructure:
-  • Database name and friendly name
-  • Secret ARN for migration setup
-  • Endpoint and port information
-
-Example:
-  ${chalk.cyan('fiftyten-db migrate targets dev')}`)
-	.action(async (environment, options) => {
-		try {
-			const manager = new MigrationManager(options.region);
-			const targetDatabases = await manager.discoverTargetDatabases(environment);
-
-			if (targetDatabases.length === 0) {
-				console.log(chalk.yellow('No target databases found.'));
-				console.log(chalk.gray('Deploy storage infrastructure first with databases enabled.'));
-				return;
-			}
-
-			console.log(chalk.blue(`📋 Available Target Databases - ${environment.toUpperCase()}`));
-			console.log('');
-
-			targetDatabases.forEach(db => {
-				console.log(chalk.green(`🗄️  ${db.friendlyName}`));
-				console.log(`   Name: ${chalk.yellow(db.name)}`);
-				console.log(`   Secret ARN: ${chalk.gray(db.secretArn)}`);
-				if (db.endpoint) {
-					console.log(`   Endpoint: ${chalk.cyan(db.endpoint + ':' + db.port)}`);
-				}
-				console.log('');
-			});
-
-		} catch (error) {
-			console.error(chalk.red('Error listing target databases:'), error instanceof Error ? error.message : String(error));
-			process.exit(1);
-		}
-	});
-
-// Cleanup migration infrastructure
-migrateCommand
-	.command('cleanup')
-	.description('Destroy migration infrastructure after successful migration')
-	.argument('<environment>', 'Environment (dev/main)')
-	.option('--region <region>', 'AWS region', 'us-west-1')
-	.addHelpText('after', `
-⚠️  This destroys all DMS migration resources:
-  • DMS replication instance
-  • Migration tasks and endpoints
-  • CloudWatch logs and alarms
-
-Only run this after successful migration and application cutover.
-
-Example:
-  ${chalk.cyan('fiftyten-db migrate cleanup dev')}`)
-	.action(async (environment, options) => {
-		try {
-			const manager = new MigrationManager(options.region);
-			await manager.cleanupMigration(environment);
-		} catch (error) {
-			console.error(chalk.red('Error cleaning up migration:'), error instanceof Error ? error.message : String(error));
-			process.exit(1);
-		}
-	});
-
-// PostgreSQL dump/restore migration
-migrateCommand
-	.command('pg-dump')
-	.description('Simple PostgreSQL dump/restore migration (recommended for PostgreSQL-to-PostgreSQL)')
-	.argument('<environment>', 'Environment (dev/main)')
-	.option('--source-db <sourceDb>', 'Source database name', 'indicator')
-	.option('--target-db <targetDb>', 'Target database name', 'indicator')
-	.option('--source-endpoint <endpoint>', 'External source database endpoint (if not using tunnel)')
-	.option('--source-username <username>', 'External source database username')
-	.option('--source-password <password>', 'External source database password')
-	.option('--data-only', 'Dump data only (no schema)')
-	.option('--skip-tables <tables>', 'Comma-separated list of tables to skip')
-	.option('--include-tables <tables>', 'Comma-separated list of tables to include (only these)')
-	.option('--region <region>', 'AWS region', 'us-west-1')
-	.addHelpText('after', `
-PostgreSQL dump/restore migration is much simpler and more reliable than DMS:
-
-${chalk.green('Advantages:')}
-  ✅ PostgreSQL-native tools (pg_dump/psql)
-  ✅ No complex infrastructure setup
-  ✅ Better error handling and debugging
-  ✅ Works perfectly for PostgreSQL-to-PostgreSQL migrations
-  ✅ Supports table filtering and data-only dumps
-
-${chalk.yellow('Migration Process:')}
-  1. Creates tunnels to both source and target databases
-  2. Uses pg_dump to extract data from source
-  3. Uses psql to load data into target
-  4. Automatically cleans up tunnels
-
-${chalk.cyan('Examples:')}
-  # Basic migration from external database
-  ${chalk.cyan('fiftyten-db migrate pg-dump dev \\\\')}
-  ${chalk.cyan('  --source-endpoint develop.cxw4cwcyepf1.us-west-1.rds.amazonaws.com \\\\')}
-  ${chalk.cyan('  --source-username ogongilgong \\\\')}
-  ${chalk.cyan('  --source-password "F5olld4QvJ2Yx8aJMA9R"')}
-
-  # Data-only migration (preserves existing schema)
-  ${chalk.cyan('fiftyten-db migrate pg-dump dev --data-only \\\\')}
-  ${chalk.cyan('  --source-endpoint develop.cxw4cwcyepf1.us-west-1.rds.amazonaws.com \\\\')}
-  ${chalk.cyan('  --source-username ogongilgong \\\\')}
-  ${chalk.cyan('  --source-password "F5olld4QvJ2Yx8aJMA9R"')}
-
-  # Skip problematic tables
-  ${chalk.cyan('fiftyten-db migrate pg-dump dev --data-only \\\\')}
-  ${chalk.cyan('  --skip-tables "migrations,typeorm_metadata" \\\\')}
-  ${chalk.cyan('  --source-endpoint develop.cxw4cwcyepf1.us-west-1.rds.amazonaws.com \\\\')}
-  ${chalk.cyan('  --source-username ogongilgong \\\\')}
-  ${chalk.cyan('  --source-password "F5olld4QvJ2Yx8aJMA9R"')}`)
-	.action(async (environment, options) => {
-		try {
-			const config: PgMigrationConfig = {
-				environment,
-				sourceDatabase: options.sourceDb,
-				targetDatabase: options.targetDb,
-				sourceEndpoint: options.sourceEndpoint,
-				sourceUsername: options.sourceUsername,
-				sourcePassword: options.sourcePassword,
-				dataOnly: options.dataOnly,
-				skipTables: options.skipTables ? options.skipTables.split(',').map((t: string) => t.trim()) : undefined,
-				includeTables: options.includeTables ? options.includeTables.split(',').map((t: string) => t.trim()) : undefined
-			};
-
-			const manager = new PgMigrationManager(options.region);
-			await manager.performPgMigration(config);
-		} catch (error) {
-			console.error(chalk.red('Error performing PostgreSQL migration:'), error instanceof Error ? error.message : String(error));
-			process.exit(1);
-		}
-	});
-
-// Test PostgreSQL connections
-migrateCommand
-	.command('pg-test')
-	.description('Test PostgreSQL database connections before migration')
-	.argument('<environment>', 'Environment (dev/main)')
-	.option('--source-db <sourceDb>', 'Source database name', 'indicator')
-	.option('--target-db <targetDb>', 'Target database name', 'indicator')
-	.option('--source-endpoint <endpoint>', 'External source database endpoint (if not using tunnel)')
-	.option('--source-username <username>', 'External source database username')
-	.option('--source-password <password>', 'External source database password')
-	.option('--region <region>', 'AWS region', 'us-west-1')
-	.addHelpText('after', `
-Tests connections to both source and target databases before performing migration.
-This helps identify connection issues early.
-
-${chalk.cyan('Example:')}
-  ${chalk.cyan('fiftyten-db migrate pg-test dev \\\\')}
-  ${chalk.cyan('  --source-endpoint develop.cxw4cwcyepf1.us-west-1.rds.amazonaws.com \\\\')}
-  ${chalk.cyan('  --source-username ogongilgong \\\\')}
-  ${chalk.cyan('  --source-password "F5olld4QvJ2Yx8aJMA9R"')}`)
-	.action(async (environment, options) => {
-		try {
-			const config: PgMigrationConfig = {
-				environment,
-				sourceDatabase: options.sourceDb,
-				targetDatabase: options.targetDb,
-				sourceEndpoint: options.sourceEndpoint,
-				sourceUsername: options.sourceUsername,
-				sourcePassword: options.sourcePassword
-			};
-
-			const manager = new PgMigrationManager(options.region);
-			await manager.testConnections(config);
-		} catch (error) {
-			console.error(chalk.red('Error testing connections:'), error instanceof Error ? error.message : String(error));
-			process.exit(1);
-		}
-	});
-
-// Get PostgreSQL migration statistics
-migrateCommand
-	.command('pg-stats')
-	.description('Compare row counts between source and target databases')
-	.argument('<environment>', 'Environment (dev/main)')
-	.option('--source-db <sourceDb>', 'Source database name', 'indicator')
-	.option('--target-db <targetDb>', 'Target database name', 'indicator')
-	.option('--source-endpoint <endpoint>', 'External source database endpoint (if not using tunnel)')
-	.option('--source-username <username>', 'External source database username')
-	.option('--source-password <password>', 'External source database password')
-	.option('--region <region>', 'AWS region', 'us-west-1')
-	.addHelpText('after', `
-Compares row counts between source and target databases to validate migration success.
-Shows table-by-table comparison with differences highlighted.
-
-${chalk.cyan('Example:')}
-  ${chalk.cyan('fiftyten-db migrate pg-stats dev \\\\')}
-  ${chalk.cyan('  --source-endpoint develop.cxw4cwcyepf1.us-west-1.rds.amazonaws.com \\\\')}
-  ${chalk.cyan('  --source-username ogongilgong \\\\')}
-  ${chalk.cyan('  --source-password "F5olld4QvJ2Yx8aJMA9R"')}`)
-	.action(async (environment, options) => {
-		try {
-			const config: PgMigrationConfig = {
-				environment,
-				sourceDatabase: options.sourceDb,
-				targetDatabase: options.targetDb,
-				sourceEndpoint: options.sourceEndpoint,
-				sourceUsername: options.sourceUsername,
-				sourcePassword: options.sourcePassword
-			};
-
-			const manager = new PgMigrationManager(options.region);
-			await manager.getMigrationStats(config);
-		} catch (error) {
-			console.error(chalk.red('Error getting migration statistics:'), error instanceof Error ? error.message : String(error));
 			process.exit(1);
 		}
 	});
