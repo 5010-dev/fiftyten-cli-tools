@@ -162,8 +162,10 @@ export class RedisConnector {
 	}
 
 	/**
-	 * Resolve the shared Valkey primary endpoint from the storage-infra
-	 * CloudFormation exports ({env}-redis-endpoint / {env}-redis-port).
+	 * Resolve the encrypted Valkey v2 primary endpoint from the storage-infra
+	 * CloudFormation exports ({env}-redis-v2-endpoint / {env}-redis-v2-port).
+	 * The v2 group remains in transit-encryption `preferred` mode during this
+	 * migration, so the local tunnel and CLI protocol stay unchanged.
 	 */
 	private async getRedisEndpoint(environment: string): Promise<RedisEndpoint> {
 		const exports: Record<string, string> = {};
@@ -178,10 +180,10 @@ export class RedisConnector {
 			nextToken = page.NextToken;
 		} while (nextToken);
 
-		const host = exports[`${environment}-redis-endpoint`];
-		const port = exports[`${environment}-redis-port`];
+		const host = exports[`${environment}-redis-v2-endpoint`];
+		const port = exports[`${environment}-redis-v2-port`];
 		if (!host || !port) {
-			throw new Error(`Valkey endpoint exports not found for '${environment}' (expected ${environment}-redis-endpoint / ${environment}-redis-port)`);
+			throw new Error(`Valkey endpoint exports not found for '${environment}' (expected ${environment}-redis-v2-endpoint / ${environment}-redis-v2-port)`);
 		}
 		return { host, port };
 	}
