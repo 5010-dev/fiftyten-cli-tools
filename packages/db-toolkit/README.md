@@ -192,6 +192,11 @@ fiftyten-db list                      # Show all available environments
 #### `valkey` - Inspect & Guarded-Modify the Shared Valkey Cache
 Run Valkey/ElastiCache commands through the bastion tunnel. Reads run freely; writes are gated. Aliased as `redis`. Requires `valkey-cli` (`brew install valkey`; `redis-cli` also works).
 
+Endpoint discovery uses the storage stack's `{environment}-redis-v2-endpoint`
+and `{environment}-redis-v2-port` exports. The v2 replication group accepts
+the existing non-TLS client during its `preferred` transition mode; TLS client
+configuration is intentionally deferred to the separate TLS migration.
+
 ```bash
 fiftyten-db valkey <environment> [command...] [options]
 
