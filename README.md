@@ -185,6 +185,31 @@ Packages are automatically published to npm when:
 - Package version is bumped
 - GitHub Actions CI passes
 
+### Branch model exception
+
+This repository records a narrow exception to the organization
+[contribution contract](https://github.com/5010-dev/.github/blob/main/CONTRIBUTING.md):
+
+- **Scope:** The whole repository uses work-branch pull requests targeting
+  `main` while it has no `dev` branch.
+- **Rationale:** This legacy package repository has a single protected branch,
+  and its existing immutable npm publication workflow runs only from `main`.
+  Adding `dev` requires a separately reviewed branch-protection and workflow
+  migration.
+- **Risks:** Merging a pull request immediately crosses the production package
+  release boundary, with no integration branch between review and publication.
+- **Approval authority:** A repository maintainer must approve the pull request
+  and the package release.
+- **Review conditions:** Use a work branch and pull request; pass the available
+  build and test commands; verify that every changed package version is unique
+  and unpublished; confirm external dependencies are ready; and keep the pull
+  request draft until the intended release window.
+- **Exit condition:** Create and protect `dev`, retarget normal pull requests to
+  it, and preserve `main` as the publication-only promotion branch.
+- **Relationship to policy:** The exception applies only to the missing `dev`
+  integration step. It does not relax `main` production authority, immutable
+  package versions, pull-request review, or conventional commit requirements.
+
 ### Manual Publishing
 ```bash
 # Publish all changed packages
