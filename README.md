@@ -1,5 +1,7 @@
 # Fiftyten CLI Tools
 
+Historical source and usage reference; see [repository retirement](#repository-retirement).
+
 [![Publish Status](https://github.com/5010-dev/fiftyten-cli-tools/workflows/Publish%20CLI%20Tools/badge.svg)](https://github.com/5010-dev/fiftyten-cli-tools/actions)
 [![npm version](https://img.shields.io/npm/v/@fiftyten/db-toolkit.svg)](https://www.npmjs.com/package/@fiftyten/db-toolkit)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -178,46 +180,37 @@ packages/your-tool/
 - Never hardcode credentials or sensitive data
 - Support AWS credential chain (IAM roles, profiles, etc.)
 
-## 🚀 Publishing
+## Repository retirement
 
-Packages are automatically published to npm when:
-- Changes are merged to `main` branch
-- Package version is bumped
-- GitHub Actions CI passes
+This repository is retained as read-only historical source. Its public publisher
+is retired: the GitHub Actions workflow and publish scripts are removed, and all
+workspace packages are private in this checkout. Existing npm versions, Git tags,
+GitHub Releases and Git history remain unchanged. The retained usage examples
+below describe the historical public CLI, not current installation guidance.
 
 ### Branch model exception
 
-This repository records a narrow exception to the organization
-[contribution contract](https://github.com/5010-dev/.github/blob/main/CONTRIBUTING.md):
+The final retirement change follows this repository's existing work-branch PR
+exception targeting `main`, under the organization
+[contribution contract](https://github.com/5010-dev/.github/blob/main/CONTRIBUTING.md).
 
-- **Scope:** The whole repository uses work-branch pull requests targeting
-  `main` while it has no `dev` branch.
-- **Rationale:** This legacy package repository has a single protected branch,
-  and its existing immutable npm publication workflow runs only from `main`.
-  Adding `dev` requires a separately reviewed branch-protection and workflow
-  migration.
-- **Risks:** Merging a pull request immediately crosses the production package
-  release boundary, with no integration branch between review and publication.
-- **Approval authority:** A repository maintainer must approve the pull request
-  and the package release.
-- **Review conditions:** Use a work branch and pull request; pass the available
-  build and test commands; verify that every changed package version is unique
-  and unpublished; confirm external dependencies are ready; and keep the pull
-  request draft until the intended release window.
-- **Exit condition:** Create and protect `dev`, retarget normal pull requests to
-  it, and preserve `main` as the publication-only promotion branch.
-- **Relationship to policy:** The exception applies only to the missing `dev`
-  integration step. It does not relax `main` production authority, immutable
-  package versions, pull-request review, or conventional commit requirements.
-
-### Manual Publishing
-```bash
-# Publish all changed packages
-pnpm publish-packages
-
-# Publish specific package
-pnpm --filter package-name publish --access public
-```
+- **Scope:** One final maintenance PR closes the legacy public publisher.
+- **Rationale:** The maintainer-approved retirement replaces a new `dev` branch,
+  protection migration, or additional development/CI framework in this repository.
+- **Risks:** A still-enabled old publisher could run during retirement. Disable
+  the workflow and remove this repository's `NPM_TOKEN` secret before merging.
+  Do not revoke a potentially shared npm account token or remove published artifacts.
+- **Approval authority:** Repository maintainer ED authorized the shutdown and
+  archival scope in [ENG-192](https://linear.app/5010-tech/issue/ENG-192).
+- **Review conditions:** Self-review the final PR; run the available frozen
+  install, build and test commands; verify no publish entrypoint remains and
+  read back the disabled workflow and absent repository secret.
+- **Exit condition:** Merge the reviewed retirement PR, verify preserved refs and
+  release records, then archive the repository read-only. No further publication
+  or development is authorized by this exception.
+- **Relationship to policy:** This bounded exception retains conventional
+  commits, rebase merge and immutable artifacts while terminating the previously
+  documented main-only release model.
 
 ## 🎯 Usage Examples
 
