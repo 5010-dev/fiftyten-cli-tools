@@ -12,8 +12,7 @@
     "lint": "pnpm -r lint",
     "format": "pnpm -r format",
     "clean": "pnpm -r clean",
-    "dev": "pnpm -r dev",
-    "publish-packages": "pnpm -r publish --access public"
+    "dev": "pnpm -r dev"
   },
   "keywords": [
     "fiftyten",

@@ -9,7 +9,8 @@ This is a TypeScript monorepo containing CLI tools for the Fiftyten platform eco
 ### Architecture
 - **Monorepo Structure**: pnpm workspaces with packages in `packages/` directory
 - **Primary Tool**: `@fiftyten/db-toolkit` - AWS Session Manager-based database toolkit
-- **Target Deployment**: Published to npm as scoped packages under `@fiftyten/`
+- **Retired repository**: Public publishing is disabled; manifests are private.
+  Preserve existing artifacts and history. See README repository retirement.
 - **AWS Integration**: Heavy use of AWS SDK v3 (EC2, SSM, Secrets Manager, IAM)
 
 ### Current Packages
@@ -59,13 +60,9 @@ pnpm dlx @fiftyten/db-toolkit psql main -d indicator
 ```
 
 ### Publishing
-```bash
-# Publish all changed packages
-pnpm publish-packages
 
-# Publish specific package
-pnpm --filter db-toolkit publish --access public
-```
+Retired. Do not publish packages or restore publisher credentials from this
+repository. Existing npm versions remain available as historical artifacts.
 
 ## Code Architecture
 
@@ -142,21 +139,8 @@ Each tool follows this structure:
 
 ## Package Development
 
-### Adding New Tools
-1. Create new directory under `packages/`
-2. Initialize with `package.json` including:
-   - Scoped name `@fiftyten/tool-name`
-   - Binary entries in `bin` field
-   - Proper scripts (build, dev, prepublishOnly)
-3. Add TypeScript configuration extending root config
-4. Implement CLI using Commander.js pattern
-5. Add package reference to root `tsconfig.json`
-
-### Publishing Requirements
-- Version bumps required for publishing
-- `prepublishOnly` script must build successfully
-- Public access configuration for scoped packages
-- GitHub repository and bug tracking URLs
+No new packages or release versions are maintained in this archived repository.
+The retained source is available for historical inspection and local builds.
 
 ### Testing Integration
 - Use Node.js native test capabilities or Jest

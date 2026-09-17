@@ -8,8 +8,7 @@
   },
   "scripts": {
     "build": "tsc",
-    "dev": "tsc --watch",
-    "prepublishOnly": "npm run build"
+    "dev": "tsc --watch"
   },
   "keywords": [
     "fiftyten",
@@ -46,7 +45,5 @@
     "url": "git+https://github.com/5010-dev/fiftyten-cli-tools.git",
     "directory": "packages/db-toolkit"
   },
-  "publishConfig": {
-    "access": "public"
-  }
+  "private": true
 }
